@@ -106,12 +106,12 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn process_socket(
-    socket: TcpStream,
+    tcp_socket: TcpStream,
     tcp_peer_addr: SocketAddr,
     udp_bind_ip: Ipv4Addr,
     udp_peer_addr: SocketAddrV4,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (tcp_in, tcp_out) = socket.into_split();
+    let (tcp_in, tcp_out) = tcp_socket.into_split();
 
     let udp_bind_addr = SocketAddrV4::new(udp_bind_ip, 0);
 

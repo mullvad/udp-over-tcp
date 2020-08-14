@@ -1,21 +1,27 @@
 use err_context::ResultExt as _;
 use std::convert::TryFrom;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::tcp::{OwnedReadHalf as TcpReadHalf, OwnedWriteHalf as TcpWriteHalf};
 use tokio::net::udp::{RecvHalf as UdpRecvHalf, SendHalf as UdpSendHalf};
 
+const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
+
 pub async fn process_tcp2udp(
-    mut tcp_in: TcpReadHalf,
+    tcp_in: TcpReadHalf,
     mut udp_out: UdpSendHalf,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut buffer = [0u8; 1024 * 64];
+    let tcp_recv_buffer_size = tcp_in
+        .as_ref()
+        .recv_buffer_size()
+        .context("Failed getting SO_RCVBUF")?;
+    let mut tcp_in = BufReader::with_capacity(tcp_recv_buffer_size, tcp_in);
+    let mut buffer = [0u8; MAX_DATAGRAM_SIZE];
     loop {
         let datagram_len = tcp_in.read_u16().await? as usize;
         let tcp_read_len = tcp_in
             .read_exact(&mut buffer[..datagram_len])
             .await
             .context("Failed reading from TCP")?;
-        assert_eq!(datagram_len, tcp_read_len);
         let udp_write_len = udp_out
             .send(&buffer[..datagram_len])
             .await
@@ -36,7 +42,7 @@ pub async fn process_udp2tcp(
     mut udp_in: UdpRecvHalf,
     mut tcp_out: TcpWriteHalf,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut buffer = [0u8; 2 + 1024 * 64];
+    let mut buffer = [0u8; 2 + MAX_DATAGRAM_SIZE];
     loop {
         let udp_read_len = udp_in
             .recv(&mut buffer[2..])

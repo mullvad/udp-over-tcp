@@ -44,32 +44,10 @@ async fn main() {
 }
 
 async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
-    let mut udp_socket = UdpSocket::bind(options.udp_listen_addr)
-        .await
-        .with_context(|_| format!("Failed to bind UDP socket to {}", options.udp_listen_addr))?;
-    log::info!("Listening on {}/UDP", udp_socket.local_addr().unwrap());
-
-    let mut buffer = [0u8; 1024 * 64];
-    let (udp_read_len, udp_peer_addr) = udp_socket
-        .recv_from(&mut buffer)
-        .await
-        .context("Failed receiving the first packet")?;
-    log::info!(
-        "Incoming connection from {}/UDP, forwarding to {}/TCP",
-        udp_peer_addr,
-        options.tcp_forward_addr
-    );
-
-    udp_socket
-        .connect(udp_peer_addr)
-        .await
-        .with_context(|_| format!("Failed to connect UDP socket to {}", udp_peer_addr))?;
-
-    let (udp_in, udp_out) = udp_socket.split();
-
     let tcp_socket = TcpStream::connect(options.tcp_forward_addr)
         .await
         .with_context(|_| format!("Failed to connect to {}/TCP", options.tcp_forward_addr))?;
+    log::info!("Connected to {}/TCP", options.tcp_forward_addr);
     if options.tcp_nodelay {
         tcp_socket
             .set_nodelay(true)
@@ -101,14 +79,35 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
             .send_buffer_size()
             .context("Failed getting SO_SNDBUF")?
     );
-
     let (tcp_in, mut tcp_out) = tcp_socket.into_split();
 
+    let mut udp_socket = UdpSocket::bind(options.udp_listen_addr)
+        .await
+        .with_context(|_| format!("Failed to bind UDP socket to {}", options.udp_listen_addr))?;
+    log::info!("Listening on {}/UDP", udp_socket.local_addr().unwrap());
+
+    let mut buffer = [0u8; 2 + 1024 * 64];
+    let (udp_read_len, udp_peer_addr) = udp_socket
+        .recv_from(&mut buffer[2..])
+        .await
+        .context("Failed receiving the first packet")?;
+    log::info!(
+        "Incoming connection from {}/UDP, forwarding to {}/TCP",
+        udp_peer_addr,
+        options.tcp_forward_addr
+    );
+
+    udp_socket
+        .connect(udp_peer_addr)
+        .await
+        .with_context(|_| format!("Failed to connect UDP socket to {}", udp_peer_addr))?;
+
+    let (udp_in, udp_out) = udp_socket.split();
+
     let datagram_len = u16::try_from(udp_read_len).unwrap();
-    log::trace!("Read {} byte UDP datagram", datagram_len);
-    tcp_out.write_u16(datagram_len).await?;
+    buffer[..2].copy_from_slice(&datagram_len.to_be_bytes()[..]);
     tcp_out
-        .write_all(&buffer[..udp_read_len])
+        .write_all(&buffer[..2 + udp_read_len])
         .await
         .context("Failed writing to TCP")?;
     log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
