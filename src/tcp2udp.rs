@@ -9,8 +9,10 @@ use shared::{process_tcp2udp, process_udp2tcp};
 #[derive(Debug, StructOpt)]
 #[structopt(name = "tcp2udp", about = "Listen for incoming TCP and forward to UDP")]
 struct Options {
+    /// The IP and TCP port to listen to for incoming traffic from udp2tcp.
     tcp_listen_addr: SocketAddrV4,
 
+    /// The IP and UDP port to forward all traffic to.
     udp_forward_addr: SocketAddrV4,
 
     #[structopt(long = "udp-bind", default_value = "0.0.0.0")]

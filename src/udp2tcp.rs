@@ -9,11 +9,12 @@ mod shared;
 use shared::{process_tcp2udp, process_udp2tcp};
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "tcp2udp", about = "Listen for incoming TCP and forward to UDP")]
+#[structopt(name = "udp2tcp", about = "Listen for incoming UDP and forward to TCP")]
 struct Options {
-    #[structopt(long = "udp-listen", default_value = "0.0.0.0:51820")]
+    /// The IP and UDP port to bind to and accept incoming connections on.
     udp_listen_addr: SocketAddrV4,
 
+    /// The IP and TCP port to forward all UDP traffic to.
     tcp_forward_addr: SocketAddrV4,
 
     /// Sets the TCP_NODELAY option on the TCP socket.
