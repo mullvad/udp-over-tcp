@@ -6,7 +6,6 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpStream, UdpSocket};
 
 mod shared;
-use shared::{process_tcp2udp, process_udp2tcp};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "udp2tcp", about = "Listen for incoming UDP and forward to TCP")]
@@ -45,42 +44,41 @@ async fn main() {
 }
 
 async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
-    let tcp_socket = TcpStream::connect(options.tcp_forward_addr)
+    let mut tcp_stream = TcpStream::connect(options.tcp_forward_addr)
         .await
         .with_context(|_| format!("Failed to connect to {}/TCP", options.tcp_forward_addr))?;
     log::info!("Connected to {}/TCP", options.tcp_forward_addr);
     if options.tcp_nodelay {
-        tcp_socket
+        tcp_stream
             .set_nodelay(true)
             .context("Failed setting TCP_NODELAY")?;
     }
     log::debug!(
         "TCP_NODELAY: {}",
-        tcp_socket.nodelay().context("Failed getting TCP_NODELAY")?
+        tcp_stream.nodelay().context("Failed getting TCP_NODELAY")?
     );
     if let Some(recv_buffer_size) = options.tcp_recv_buffer_size {
-        tcp_socket
+        tcp_stream
             .set_recv_buffer_size(recv_buffer_size)
             .context("Failed setting SO_RCVBUF")?;
     }
     log::debug!(
         "SO_RCVBUF: {}",
-        tcp_socket
+        tcp_stream
             .recv_buffer_size()
             .context("Failed getting SO_RCVBUF")?
     );
     if let Some(send_buffer_size) = options.tcp_send_buffer_size {
-        tcp_socket
+        tcp_stream
             .set_send_buffer_size(send_buffer_size)
             .context("Failed setting SO_SNDBUF")?;
     }
     log::debug!(
         "SO_SNDBUF: {}",
-        tcp_socket
+        tcp_stream
             .send_buffer_size()
             .context("Failed getting SO_SNDBUF")?
     );
-    let (tcp_in, mut tcp_out) = tcp_socket.into_split();
 
     let mut udp_socket = UdpSocket::bind(options.udp_listen_addr)
         .await
@@ -103,43 +101,15 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         .await
         .with_context(|_| format!("Failed to connect UDP socket to {}", udp_peer_addr))?;
 
-    let (udp_in, udp_out) = udp_socket.split();
-
     let datagram_len = u16::try_from(udp_read_len).unwrap();
     buffer[..2].copy_from_slice(&datagram_len.to_be_bytes()[..]);
-    tcp_out
+    tcp_stream
         .write_all(&buffer[..2 + udp_read_len])
         .await
         .context("Failed writing to TCP")?;
     log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
 
-    let tcp2udp_future = async move {
-        if let Err(error) = process_tcp2udp(tcp_in, udp_out).await {
-            log::error!("Error: {}", error.display("\nCaused by: "));
-        }
-    };
-    let udp2tcp_future = async move {
-        if let Err(error) = process_udp2tcp(udp_in, tcp_out).await {
-            log::error!("Error: {}", error.display("\nCaused by: "));
-        }
-    };
-
-    tokio::select! {
-        _ = tcp2udp_future => {
-            log::trace!(
-                "Closing TCP->UDP end for {}->{}",
-                options.tcp_forward_addr,
-                udp_peer_addr
-            );
-        },
-        _ = udp2tcp_future => {
-            log::trace!(
-                "Closing UDP->TCP end for {}->{}",
-                udp_peer_addr,
-                options.tcp_forward_addr
-            );
-        }
-    }
+    shared::process_udp_over_tcp(udp_socket, tcp_stream).await;
     log::trace!(
         "Closing forwarding for {}/UDP <-> {}/TCP",
         udp_peer_addr,
