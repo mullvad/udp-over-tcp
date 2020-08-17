@@ -1,0 +1,21 @@
+# Install this service file to /etc/systemd/system/tcp2udp.service
+# Install the tcp2udp binary to /usr/local/bin or change the path below
+#
+# On some distros, if you copy the binary in to the computer via scp or similar,
+# you might need to run the following to reset some safety triggers triggered by SELinux:
+#  $ sudo restorecon -rv /usr/local/bin
+
+[Unit]
+Description=A TCP to UDP tunneling daemon
+Documentation=https://github.com/mullvad/udp-over-tcp
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Environment=RUST_LOG=info
+ExecStart=/usr/local/bin/tcp2udp --threads=2 --udp-bind=127.0.0.1 0.0.0.0:443 127.0.0.1:51820
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

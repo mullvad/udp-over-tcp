@@ -2,6 +2,10 @@
 
 UDP traffic in a TCP stream.
 
+## Installing
+
+See `tcp2udp.service` for server side systemd service definition.
+
 ## Example
 
 Make the server listen for TCP connections that it can then forward to a local UDP service.
