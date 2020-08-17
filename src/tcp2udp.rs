@@ -33,13 +33,29 @@ struct Options {
     /// Changes the size of the operating system's send buffer associated with the socket.
     #[structopt(long = "send-buffer")]
     tcp_send_buffer_size: Option<usize>,
+
+    /// Sets the number of worker threads to use.
+    /// The default value is the number of cores available to the system.
+    #[structopt(long = "threads")]
+    threads: Option<std::num::NonZeroU8>,
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     env_logger::init();
     let options = Options::from_args();
-    if let Err(error) = run(options).await {
+
+    let mut rt_builder = tokio::runtime::Builder::new();
+    rt_builder.threaded_scheduler().enable_all();
+    if let Some(threads) = options.threads {
+        log::info!("Using {} threads", threads);
+        let threads = usize::from(threads.get());
+        rt_builder.core_threads(threads).max_threads(threads);
+    }
+    let result = rt_builder
+        .build()
+        .expect("Failed to build async runtime")
+        .block_on(run(options));
+    if let Err(error) = result {
         log::error!("Error: {}", error.display("\nCaused by: "));
         std::process::exit(1);
     }
