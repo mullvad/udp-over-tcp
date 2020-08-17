@@ -20,7 +20,7 @@ struct Options {
 
     /// Sets the TCP_NODELAY option on the TCP socket.
     /// If set, this option disables the Nagle algorithm.
-    /// This means that segments are always sent as soon as possible
+    /// This means that segments are always sent as soon as possible.
     #[structopt(long = "nodelay")]
     tcp_nodelay: bool,
 
