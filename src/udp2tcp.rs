@@ -16,21 +16,8 @@ struct Options {
     /// The IP and TCP port to forward all UDP traffic to.
     tcp_forward_addr: SocketAddrV4,
 
-    /// Sets the TCP_NODELAY option on the TCP socket.
-    /// If set, this option disables the Nagle algorithm.
-    /// This means that segments are always sent as soon as possible
-    #[structopt(long = "nodelay")]
-    tcp_nodelay: bool,
-
-    /// If given, sets the SO_RCVBUF option on the TCP socket to the given value.
-    /// Changes the size of the operating system's receive buffer associated with the socket.
-    #[structopt(long = "recv-buffer")]
-    tcp_recv_buffer_size: Option<usize>,
-
-    /// If given, sets the SO_SNDBUF option on the TCP socket to the given value.
-    /// Changes the size of the operating system's send buffer associated with the socket.
-    #[structopt(long = "send-buffer")]
-    tcp_send_buffer_size: Option<usize>,
+    #[structopt(flatten)]
+    tcp_options: shared::TcpOptions,
 }
 
 #[tokio::main]
@@ -48,37 +35,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         .await
         .with_context(|_| format!("Failed to connect to {}/TCP", options.tcp_forward_addr))?;
     log::info!("Connected to {}/TCP", options.tcp_forward_addr);
-    if options.tcp_nodelay {
-        tcp_stream
-            .set_nodelay(true)
-            .context("Failed setting TCP_NODELAY")?;
-    }
-    log::debug!(
-        "TCP_NODELAY: {}",
-        tcp_stream.nodelay().context("Failed getting TCP_NODELAY")?
-    );
-    if let Some(recv_buffer_size) = options.tcp_recv_buffer_size {
-        tcp_stream
-            .set_recv_buffer_size(recv_buffer_size)
-            .context("Failed setting SO_RCVBUF")?;
-    }
-    log::debug!(
-        "SO_RCVBUF: {}",
-        tcp_stream
-            .recv_buffer_size()
-            .context("Failed getting SO_RCVBUF")?
-    );
-    if let Some(send_buffer_size) = options.tcp_send_buffer_size {
-        tcp_stream
-            .set_send_buffer_size(send_buffer_size)
-            .context("Failed setting SO_SNDBUF")?;
-    }
-    log::debug!(
-        "SO_SNDBUF: {}",
-        tcp_stream
-            .send_buffer_size()
-            .context("Failed getting SO_SNDBUF")?
-    );
+    shared::apply_tcp_options(&tcp_stream, &options.tcp_options)?;
 
     let mut udp_socket = UdpSocket::bind(options.udp_listen_addr)
         .await
