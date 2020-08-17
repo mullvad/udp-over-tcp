@@ -97,7 +97,9 @@ async fn process_socket(
         .with_context(|_| format!("Failed to connect UDP socket to {}", udp_peer_addr))?;
     log::debug!(
         "UDP socket bound to {} and connected to {}",
-        udp_socket.local_addr()?,
+        udp_socket
+            .local_addr()
+            .context("Failed getting local address for UDP socket")?,
         udp_peer_addr
     );
 
