@@ -3,8 +3,6 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use structopt::StructOpt;
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 
-mod shared;
-
 #[derive(Debug, StructOpt)]
 #[structopt(name = "tcp2udp", about = "Listen for incoming TCP and forward to UDP")]
 struct Options {
@@ -23,7 +21,7 @@ struct Options {
     threads: Option<std::num::NonZeroU8>,
 
     #[structopt(flatten)]
-    tcp_options: shared::TcpOptions,
+    tcp_options: udp_over_tcp::TcpOptions,
 }
 
 fn main() {
@@ -62,7 +60,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         match tcp_listener.accept().await {
             Ok((tcp_stream, tcp_peer_addr)) => {
                 log::debug!("Incoming connection from {}/TCP", tcp_peer_addr);
-                shared::apply_tcp_options(&tcp_stream, &options.tcp_options)?;
+                udp_over_tcp::apply_tcp_options(&tcp_stream, &options.tcp_options)?;
 
                 let udp_bind_ip = options.udp_bind_ip;
                 let udp_forward_addr = options.udp_forward_addr;
@@ -103,7 +101,7 @@ async fn process_socket(
         udp_peer_addr
     );
 
-    shared::process_udp_over_tcp(udp_socket, tcp_stream).await;
+    udp_over_tcp::process_udp_over_tcp(udp_socket, tcp_stream).await;
     log::trace!(
         "Closing forwarding for {}/TCP <-> {}/UDP",
         tcp_peer_addr,

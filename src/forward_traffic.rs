@@ -7,10 +7,6 @@ use tokio::net::tcp::{OwnedReadHalf as TcpReadHalf, OwnedWriteHalf as TcpWriteHa
 use tokio::net::udp::{RecvHalf as UdpRecvHalf, SendHalf as UdpSendHalf};
 use tokio::net::{TcpStream, UdpSocket};
 
-#[path = "tcp_options.rs"]
-mod tcp_options;
-pub use tcp_options::*;
-
 const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
 
 /// Forward traffic between the given UDP and TCP sockets in both directions.

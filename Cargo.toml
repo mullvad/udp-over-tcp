@@ -6,14 +6,6 @@ description = "Tunnel UDP traffic inside a TCP stream"
 edition = "2018"
 publish = false
 
-[[bin]]
-name = "udp2tcp"
-path = "src/udp2tcp.rs"
-
-[[bin]]
-name = "tcp2udp"
-path = "src/tcp2udp.rs"
-
 [profile.release]
 opt-level = 3
 lto = true

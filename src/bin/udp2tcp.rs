@@ -7,8 +7,6 @@ use structopt::StructOpt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpStream, UdpSocket};
 
-mod shared;
-
 #[derive(Debug, StructOpt)]
 #[structopt(name = "udp2tcp", about = "Listen for incoming UDP and forward to TCP")]
 struct Options {
@@ -19,7 +17,7 @@ struct Options {
     tcp_forward_addr: SocketAddrV4,
 
     #[structopt(flatten)]
-    tcp_options: shared::TcpOptions,
+    tcp_options: udp_over_tcp::TcpOptions,
 }
 
 #[derive(Debug)]
@@ -60,7 +58,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(Udp2TcpError::ConnectTcp)?;
     log::info!("Connected to {}/TCP", options.tcp_forward_addr);
-    shared::apply_tcp_options(&tcp_stream, &options.tcp_options)?;
+    udp_over_tcp::apply_tcp_options(&tcp_stream, &options.tcp_options)?;
 
     let mut udp_socket = UdpSocket::bind(options.udp_listen_addr)
         .await
@@ -91,7 +89,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         .context("Failed writing to TCP")?;
     log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
 
-    shared::process_udp_over_tcp(udp_socket, tcp_stream).await;
+    udp_over_tcp::process_udp_over_tcp(udp_socket, tcp_stream).await;
     log::trace!(
         "Closing forwarding for {}/UDP <-> {}/TCP",
         udp_peer_addr,
