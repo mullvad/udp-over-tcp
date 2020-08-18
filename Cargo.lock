@@ -535,12 +535,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "triggered"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3aa15a5f3ffd17f7c101155c6e7cf9c4060ee767730eb53c0580e452c3725af1"
-
-[[package]]
 name = "udp-over-tcp"
 version = "0.1.0"
 dependencies = [
@@ -550,7 +544,6 @@ dependencies = [
  "log",
  "structopt",
  "tokio",
- "triggered",
 ]
 
 [[package]]

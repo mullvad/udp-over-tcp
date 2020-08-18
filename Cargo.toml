@@ -24,6 +24,5 @@ tokio = { version = "0.2.22", features = ["rt-threaded", "macros", "tcp", "udp",
 err-context = "0.1.0"
 log = "0.4.11"
 env_logger = "0.7.1"
-triggered = "0.1.1"
 futures = "0.3.5"
 structopt = "0.3.16"
