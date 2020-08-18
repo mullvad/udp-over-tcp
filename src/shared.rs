@@ -89,8 +89,8 @@ pub async fn process_udp_over_tcp(udp_socket: UdpSocket, tcp_stream: TcpStream) 
 
     // Wait until the UDP->TCP or TCP->UDP future terminates, then abort the other.
     let remaining_join_handle = match select(tcp2udp_join, udp2tcp_join).await {
-        Either::Left((_, join_handle)) => join_handle,
-        Either::Right((_, join_handle)) => join_handle,
+        Either::Left((_, udp2tcp_join)) => udp2tcp_join,
+        Either::Right((_, tcp2udp_join)) => tcp2udp_join,
     };
     tcp2udp_abort.abort();
     udp2tcp_abort.abort();
