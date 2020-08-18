@@ -24,8 +24,13 @@ pub struct TcpOptions {
 
 #[derive(Debug)]
 pub enum ApplyTcpOptionsError {
+    /// Failed to get/set TCP_NODELAY
     NoDelay(io::Error),
+
+    /// Failed to get/set TCP_RCVBUF
     RecvBuffer(io::Error),
+
+    /// Failed to get/set TCP_SNDBUF
     SendBuffer(io::Error),
 }
 

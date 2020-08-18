@@ -22,6 +22,9 @@ pub struct Options {
 #[derive(Debug)]
 pub enum Error {
     ConnectTcp(io::Error),
+    ApplyTcpOptions(crate::tcp_options::ApplyTcpOptionsError),
+    BindUdp(io::Error),
+    ConnectUdp(io::Error),
 }
 
 impl fmt::Display for Error {
@@ -29,6 +32,9 @@ impl fmt::Display for Error {
         use Error::*;
         match self {
             ConnectTcp(_) => "Failed to connect to TCP forward address".fmt(f),
+            ApplyTcpOptions(e) => e.fmt(f),
+            BindUdp(_) => "Failed to bind UDP socket locally".fmt(f),
+            ConnectUdp(_) => "Failed to connect UDP socket to peer".fmt(f),
         }
     }
 }
@@ -38,6 +44,9 @@ impl std::error::Error for Error {
         use Error::*;
         match self {
             ConnectTcp(e) => Some(e),
+            ApplyTcpOptions(e) => e.source(),
+            BindUdp(e) => Some(e),
+            ConnectUdp(e) => Some(e),
         }
     }
 }
@@ -47,11 +56,11 @@ pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(Error::ConnectTcp)?;
     log::info!("Connected to {}/TCP", options.tcp_forward_addr);
-    crate::tcp_options::apply(&tcp_stream, &options.tcp_options)?;
+    crate::tcp_options::apply(&tcp_stream, &options.tcp_options).map_err(Error::ApplyTcpOptions)?;
 
     let mut udp_socket = UdpSocket::bind(options.udp_listen_addr)
         .await
-        .with_context(|_| format!("Failed to bind UDP socket to {}", options.udp_listen_addr))?;
+        .map_err(Error::BindUdp)?;
     log::info!("Listening on {}/UDP", udp_socket.local_addr().unwrap());
 
     let mut buffer = [0u8; 2 + 1024 * 64];
@@ -68,7 +77,7 @@ pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     udp_socket
         .connect(udp_peer_addr)
         .await
-        .with_context(|_| format!("Failed to connect UDP socket to {}", udp_peer_addr))?;
+        .map_err(Error::ConnectUdp)?;
 
     let datagram_len = u16::try_from(udp_read_len).unwrap();
     buffer[..2].copy_from_slice(&datagram_len.to_be_bytes()[..]);
