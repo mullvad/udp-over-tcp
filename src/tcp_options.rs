@@ -2,23 +2,24 @@ use std::fmt;
 use std::io;
 use tokio::net::TcpStream;
 
+/// Options to apply to the TCP socket involved in the tunneling.
 #[derive(Debug, structopt::StructOpt)]
 pub struct TcpOptions {
     /// Sets the TCP_NODELAY option on the TCP socket.
     /// If set, this option disables the Nagle algorithm.
     /// This means that segments are always sent as soon as possible.
     #[structopt(long = "nodelay")]
-    nodelay: bool,
+    pub nodelay: bool,
 
     /// If given, sets the SO_RCVBUF option on the TCP socket to the given number of bytes.
     /// Changes the size of the operating system's receive buffer associated with the socket.
     #[structopt(long = "recv-buffer")]
-    recv_buffer_size: Option<usize>,
+    pub recv_buffer_size: Option<usize>,
 
     /// If given, sets the SO_SNDBUF option on the TCP socket to the given number of bytes.
     /// Changes the size of the operating system's send buffer associated with the socket.
     #[structopt(long = "send-buffer")]
-    send_buffer_size: Option<usize>,
+    pub send_buffer_size: Option<usize>,
 }
 
 #[derive(Debug)]

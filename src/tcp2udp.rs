@@ -6,16 +6,16 @@ use tokio::net::{TcpListener, TcpStream, UdpSocket};
 #[derive(Debug, StructOpt)]
 pub struct Options {
     /// The IP and TCP port to listen to for incoming traffic from udp2tcp.
-    tcp_listen_addr: SocketAddrV4,
+    pub tcp_listen_addr: SocketAddrV4,
 
     /// The IP and UDP port to forward all traffic to.
-    udp_forward_addr: SocketAddrV4,
+    pub udp_forward_addr: SocketAddrV4,
 
     #[structopt(long = "udp-bind", default_value = "0.0.0.0")]
-    udp_bind_ip: Ipv4Addr,
+    pub udp_bind_ip: Ipv4Addr,
 
     #[structopt(flatten)]
-    tcp_options: crate::tcp_options::TcpOptions,
+    pub tcp_options: crate::tcp_options::TcpOptions,
 }
 
 pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {

@@ -10,13 +10,13 @@ use tokio::net::{TcpStream, UdpSocket};
 #[derive(Debug, StructOpt)]
 pub struct Options {
     /// The IP and UDP port to bind to and accept incoming connections on.
-    udp_listen_addr: SocketAddrV4,
+    pub udp_listen_addr: SocketAddrV4,
 
     /// The IP and TCP port to forward all UDP traffic to.
-    tcp_forward_addr: SocketAddrV4,
+    pub tcp_forward_addr: SocketAddrV4,
 
     #[structopt(flatten)]
-    tcp_options: crate::tcp_options::TcpOptions,
+    pub tcp_options: crate::tcp_options::TcpOptions,
 }
 
 #[derive(Debug)]
