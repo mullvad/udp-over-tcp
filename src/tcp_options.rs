@@ -6,7 +6,7 @@ use tokio::net::TcpStream;
 #[derive(Debug, structopt::StructOpt)]
 pub struct TcpOptions {
     /// Sets the TCP_NODELAY option on the TCP socket.
-    /// If set, this option disables the Nagle algorithm.
+    /// If set to true, this option disables the Nagle algorithm.
     /// This means that segments are always sent as soon as possible.
     #[structopt(long = "nodelay")]
     pub nodelay: bool,
@@ -54,11 +54,9 @@ impl std::error::Error for ApplyTcpOptionsError {
 
 /// Applies the given options to the given TCP socket.
 pub fn apply(tcp_stream: &TcpStream, options: &TcpOptions) -> Result<(), ApplyTcpOptionsError> {
-    if options.nodelay {
-        tcp_stream
-            .set_nodelay(true)
-            .map_err(ApplyTcpOptionsError::NoDelay)?;
-    }
+    tcp_stream
+        .set_nodelay(options.nodelay)
+        .map_err(ApplyTcpOptionsError::NoDelay)?;
     log::debug!(
         "TCP_NODELAY: {}",
         tcp_stream
