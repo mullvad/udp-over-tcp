@@ -15,7 +15,7 @@ pub struct Options {
     udp_bind_ip: Ipv4Addr,
 
     #[structopt(flatten)]
-    tcp_options: crate::TcpOptions,
+    tcp_options: crate::tcp_options::TcpOptions,
 }
 
 pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
@@ -33,7 +33,7 @@ pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         match tcp_listener.accept().await {
             Ok((tcp_stream, tcp_peer_addr)) => {
                 log::debug!("Incoming connection from {}/TCP", tcp_peer_addr);
-                crate::apply_tcp_options(&tcp_stream, &options.tcp_options)?;
+                crate::tcp_options::apply(&tcp_stream, &options.tcp_options)?;
 
                 let udp_bind_ip = options.udp_bind_ip;
                 let udp_forward_addr = options.udp_forward_addr;
@@ -74,7 +74,7 @@ async fn process_socket(
         udp_peer_addr
     );
 
-    crate::process_udp_over_tcp(udp_socket, tcp_stream).await;
+    crate::forward_traffic::process_udp_over_tcp(udp_socket, tcp_stream).await;
     log::trace!(
         "Closing forwarding for {}/TCP <-> {}/UDP",
         tcp_peer_addr,

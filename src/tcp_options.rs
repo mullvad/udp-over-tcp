@@ -52,10 +52,7 @@ impl std::error::Error for ApplyTcpOptionsError {
 }
 
 /// Applies the given options to the given TCP socket.
-pub fn apply_tcp_options(
-    tcp_stream: &TcpStream,
-    options: &TcpOptions,
-) -> Result<(), ApplyTcpOptionsError> {
+pub fn apply(tcp_stream: &TcpStream, options: &TcpOptions) -> Result<(), ApplyTcpOptionsError> {
     if options.nodelay {
         tcp_stream
             .set_nodelay(true)

@@ -16,7 +16,7 @@ pub struct Options {
     tcp_forward_addr: SocketAddrV4,
 
     #[structopt(flatten)]
-    tcp_options: crate::TcpOptions,
+    tcp_options: crate::tcp_options::TcpOptions,
 }
 
 #[derive(Debug)]
@@ -47,7 +47,7 @@ pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(Error::ConnectTcp)?;
     log::info!("Connected to {}/TCP", options.tcp_forward_addr);
-    crate::apply_tcp_options(&tcp_stream, &options.tcp_options)?;
+    crate::tcp_options::apply(&tcp_stream, &options.tcp_options)?;
 
     let mut udp_socket = UdpSocket::bind(options.udp_listen_addr)
         .await
@@ -78,7 +78,7 @@ pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         .context("Failed writing to TCP")?;
     log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
 
-    crate::process_udp_over_tcp(udp_socket, tcp_stream).await;
+    crate::forward_traffic::process_udp_over_tcp(udp_socket, tcp_stream).await;
     log::trace!(
         "Closing forwarding for {}/UDP <-> {}/TCP",
         udp_peer_addr,
