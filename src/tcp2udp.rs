@@ -1,18 +1,18 @@
 use err_context::{BoxedErrorExt as _, ResultExt as _};
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::net::{IpAddr, SocketAddr};
 use structopt::StructOpt;
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 
 #[derive(Debug, StructOpt)]
 pub struct Options {
     /// The IP and TCP port to listen to for incoming traffic from udp2tcp.
-    pub tcp_listen_addr: SocketAddrV4,
+    pub tcp_listen_addr: SocketAddr,
 
     /// The IP and UDP port to forward all traffic to.
-    pub udp_forward_addr: SocketAddrV4,
+    pub udp_forward_addr: SocketAddr,
 
     #[structopt(long = "udp-bind", default_value = "0.0.0.0")]
-    pub udp_bind_ip: Ipv4Addr,
+    pub udp_bind_ip: IpAddr,
 
     #[structopt(flatten)]
     pub tcp_options: crate::tcp_options::TcpOptions,
@@ -54,10 +54,10 @@ pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
 async fn process_socket(
     tcp_stream: TcpStream,
     tcp_peer_addr: SocketAddr,
-    udp_bind_ip: Ipv4Addr,
-    udp_peer_addr: SocketAddrV4,
+    udp_bind_ip: IpAddr,
+    udp_peer_addr: SocketAddr,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let udp_bind_addr = SocketAddrV4::new(udp_bind_ip, 0);
+    let udp_bind_addr = SocketAddr::new(udp_bind_ip, 0);
 
     let udp_socket = UdpSocket::bind(udp_bind_addr)
         .await
