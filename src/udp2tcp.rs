@@ -1,98 +1,147 @@
-use err_context::ResultExt as _;
 use std::convert::TryFrom;
 use std::fmt;
 use std::io;
-use std::net::SocketAddrV4;
-use structopt::StructOpt;
+use std::net::SocketAddr;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpStream, UdpSocket};
 
-#[derive(Debug, StructOpt)]
-pub struct Options {
-    /// The IP and UDP port to bind to and accept incoming connections on.
-    pub udp_listen_addr: SocketAddrV4,
-
-    /// The IP and TCP port to forward all UDP traffic to.
-    pub tcp_forward_addr: SocketAddrV4,
-
-    #[structopt(flatten)]
-    pub tcp_options: crate::tcp_options::TcpOptions,
-}
-
 #[derive(Debug)]
-pub enum Error {
+pub enum ConnectError {
+    /// Failed to connect to TCP forward address.
     ConnectTcp(io::Error),
+    /// Failed to apply the given TCP socket options.
     ApplyTcpOptions(crate::tcp_options::ApplyTcpOptionsError),
+    /// Failed to bind UDP socket locally.
     BindUdp(io::Error),
-    ConnectUdp(io::Error),
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for ConnectError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use Error::*;
+        use ConnectError::*;
         match self {
             ConnectTcp(_) => "Failed to connect to TCP forward address".fmt(f),
             ApplyTcpOptions(e) => e.fmt(f),
             BindUdp(_) => "Failed to bind UDP socket locally".fmt(f),
-            ConnectUdp(_) => "Failed to connect UDP socket to peer".fmt(f),
         }
     }
 }
 
-impl std::error::Error for Error {
+impl std::error::Error for ConnectError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use Error::*;
+        use ConnectError::*;
         match self {
             ConnectTcp(e) => Some(e),
             ApplyTcpOptions(e) => e.source(),
             BindUdp(e) => Some(e),
-            ConnectUdp(e) => Some(e),
         }
     }
 }
 
-pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
-    let mut tcp_stream = TcpStream::connect(options.tcp_forward_addr)
-        .await
-        .map_err(Error::ConnectTcp)?;
-    log::info!("Connected to {}/TCP", options.tcp_forward_addr);
-    crate::tcp_options::apply(&tcp_stream, &options.tcp_options).map_err(Error::ApplyTcpOptions)?;
+#[derive(Debug)]
+pub enum ForwardError {
+    ReadUdp(io::Error),
+    ConnectUdp(io::Error),
+    WriteTcp(io::Error),
+}
 
-    let mut udp_socket = UdpSocket::bind(options.udp_listen_addr)
-        .await
-        .map_err(Error::BindUdp)?;
-    log::info!("Listening on {}/UDP", udp_socket.local_addr().unwrap());
+impl fmt::Display for ForwardError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use ForwardError::*;
+        match self {
+            ReadUdp(_) => "Failed receiving the first UDP datagram".fmt(f),
+            ConnectUdp(_) => "Failed to connect UDP socket to peer".fmt(f),
+            WriteTcp(_) => "Failed to write first datagram to TCP socket".fmt(f),
+        }
+    }
+}
 
-    let mut buffer = [0u8; 2 + 1024 * 64];
-    let (udp_read_len, udp_peer_addr) = udp_socket
-        .recv_from(&mut buffer[2..])
-        .await
-        .context("Failed receiving the first packet")?;
-    log::info!(
-        "Incoming connection from {}/UDP, forwarding to {}/TCP",
-        udp_peer_addr,
-        options.tcp_forward_addr
-    );
+impl std::error::Error for ForwardError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use ForwardError::*;
+        match self {
+            ReadUdp(e) => Some(e),
+            ConnectUdp(e) => Some(e),
+            WriteTcp(e) => Some(e),
+        }
+    }
+}
 
-    udp_socket
-        .connect(udp_peer_addr)
-        .await
-        .map_err(Error::ConnectUdp)?;
+/// Struct allowing listening on UDP and forwarding the traffic over TCP.
+pub struct Udp2Tcp {
+    tcp_stream: TcpStream,
+    udp_socket: UdpSocket,
+}
 
-    let datagram_len = u16::try_from(udp_read_len).unwrap();
-    buffer[..2].copy_from_slice(&datagram_len.to_be_bytes()[..]);
-    tcp_stream
-        .write_all(&buffer[..2 + udp_read_len])
-        .await
-        .context("Failed writing to TCP")?;
-    log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
+impl Udp2Tcp {
+    /// Connects to the given TCP address and binds to the given UDP address.
+    pub async fn new(
+        udp_listen_addr: SocketAddr,
+        tcp_forward_addr: SocketAddr,
+        tcp_options: Option<&crate::TcpOptions>,
+    ) -> Result<Self, ConnectError> {
+        let tcp_stream = TcpStream::connect(tcp_forward_addr)
+            .await
+            .map_err(ConnectError::ConnectTcp)?;
+        log::info!("Connected to {}/TCP", tcp_forward_addr);
+        if let Some(tcp_options) = tcp_options {
+            crate::tcp_options::apply(&tcp_stream, tcp_options)
+                .map_err(ConnectError::ApplyTcpOptions)?;
+        }
 
-    crate::forward_traffic::process_udp_over_tcp(udp_socket, tcp_stream).await;
-    log::trace!(
-        "Closing forwarding for {}/UDP <-> {}/TCP",
-        udp_peer_addr,
-        options.tcp_forward_addr,
-    );
+        let udp_socket = UdpSocket::bind(udp_listen_addr)
+            .await
+            .map_err(ConnectError::BindUdp)?;
+        match udp_socket.local_addr() {
+            Ok(addr) => log::info!("Listening on {}/UDP", addr),
+            Err(e) => log::error!("Unable to get UDP local addr: {}", e),
+        }
 
-    Ok(())
+        Ok(Self {
+            tcp_stream,
+            udp_socket,
+        })
+    }
+
+    /// Returns the UDP address this instance is listening on for incoming datagrams to forward.
+    pub fn local_udp_addr(&self) -> io::Result<SocketAddr> {
+        self.udp_socket.local_addr()
+    }
+
+    /// Runs the forwarding until one of the sockets is closed.
+    pub async fn run(mut self) -> Result<(), ForwardError> {
+        let mut buffer = [0u8; u16::MAX as usize];
+        let (udp_read_len, udp_peer_addr) = self
+            .udp_socket
+            .recv_from(&mut buffer[2..])
+            .await
+            .map_err(ForwardError::ReadUdp)?;
+        log::info!("Incoming connection from {}/UDP", udp_peer_addr,);
+
+        self.udp_socket
+            .connect(udp_peer_addr)
+            .await
+            .map_err(ForwardError::ConnectUdp)?;
+
+        let datagram_len = u16::try_from(udp_read_len).unwrap();
+        buffer[..2].copy_from_slice(&datagram_len.to_be_bytes()[..]);
+        self.tcp_stream
+            .write_all(&buffer[..2 + udp_read_len])
+            .await
+            .map_err(ForwardError::WriteTcp)?;
+        log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
+
+        let tcp_forward_addr = match self.tcp_stream.peer_addr() {
+            Ok(addr) => addr.to_string(),
+            Err(_e) => "unknown".to_owned(),
+        };
+
+        crate::forward_traffic::process_udp_over_tcp(self.udp_socket, self.tcp_stream).await;
+        log::trace!(
+            "Closing forwarding for {}/UDP <-> {}/TCP",
+            udp_peer_addr,
+            tcp_forward_addr,
+        );
+
+        Ok(())
+    }
 }
