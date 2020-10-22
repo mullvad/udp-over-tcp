@@ -1,5 +1,7 @@
 use err_context::{BoxedErrorExt as _, ResultExt as _};
 use std::convert::TryFrom;
+use std::fmt;
+use std::io;
 use std::net::SocketAddrV4;
 use structopt::StructOpt;
 use tokio::io::AsyncWriteExt;
@@ -20,6 +22,29 @@ struct Options {
     tcp_options: shared::TcpOptions,
 }
 
+#[derive(Debug)]
+pub enum Udp2TcpError {
+    ConnectTcp(io::Error),
+}
+
+impl fmt::Display for Udp2TcpError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use Udp2TcpError::*;
+        match self {
+            ConnectTcp(_) => "Failed to connect to TCP forward address".fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for Udp2TcpError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use Udp2TcpError::*;
+        match self {
+            ConnectTcp(e) => Some(e),
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     env_logger::init();
@@ -33,7 +58,7 @@ async fn main() {
 async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     let mut tcp_stream = TcpStream::connect(options.tcp_forward_addr)
         .await
-        .with_context(|_| format!("Failed to connect to {}/TCP", options.tcp_forward_addr))?;
+        .map_err(Udp2TcpError::ConnectTcp)?;
     log::info!("Connected to {}/TCP", options.tcp_forward_addr);
     shared::apply_tcp_options(&tcp_stream, &options.tcp_options)?;
 
