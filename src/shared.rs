@@ -7,65 +7,11 @@ use tokio::net::tcp::{OwnedReadHalf as TcpReadHalf, OwnedWriteHalf as TcpWriteHa
 use tokio::net::udp::{RecvHalf as UdpRecvHalf, SendHalf as UdpSendHalf};
 use tokio::net::{TcpStream, UdpSocket};
 
+#[path = "tcp_options.rs"]
+mod tcp_options;
+pub use tcp_options::*;
+
 const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
-
-#[derive(Debug, structopt::StructOpt)]
-pub struct TcpOptions {
-    /// Sets the TCP_NODELAY option on the TCP socket.
-    /// If set, this option disables the Nagle algorithm.
-    /// This means that segments are always sent as soon as possible.
-    #[structopt(long = "nodelay")]
-    nodelay: bool,
-
-    /// If given, sets the SO_RCVBUF option on the TCP socket to the given number of bytes.
-    /// Changes the size of the operating system's receive buffer associated with the socket.
-    #[structopt(long = "recv-buffer")]
-    recv_buffer_size: Option<usize>,
-
-    /// If given, sets the SO_SNDBUF option on the TCP socket to the given number of bytes.
-    /// Changes the size of the operating system's send buffer associated with the socket.
-    #[structopt(long = "send-buffer")]
-    send_buffer_size: Option<usize>,
-}
-
-/// Applies the given options to the given TCP socket.
-pub fn apply_tcp_options(
-    tcp_stream: &TcpStream,
-    options: &TcpOptions,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if options.nodelay {
-        tcp_stream
-            .set_nodelay(true)
-            .context("Failed setting TCP_NODELAY")?;
-    }
-    log::debug!(
-        "TCP_NODELAY: {}",
-        tcp_stream.nodelay().context("Failed getting TCP_NODELAY")?
-    );
-    if let Some(recv_buffer_size) = options.recv_buffer_size {
-        tcp_stream
-            .set_recv_buffer_size(recv_buffer_size)
-            .context("Failed setting SO_RCVBUF")?;
-    }
-    log::debug!(
-        "SO_RCVBUF: {}",
-        tcp_stream
-            .recv_buffer_size()
-            .context("Failed getting SO_RCVBUF")?
-    );
-    if let Some(send_buffer_size) = options.send_buffer_size {
-        tcp_stream
-            .set_send_buffer_size(send_buffer_size)
-            .context("Failed setting SO_SNDBUF")?;
-    }
-    log::debug!(
-        "SO_SNDBUF: {}",
-        tcp_stream
-            .send_buffer_size()
-            .context("Failed getting SO_SNDBUF")?
-    );
-    Ok(())
-}
 
 /// Forward traffic between the given UDP and TCP sockets in both directions.
 /// This async function runs until one of the sockets are closed or there is an error.
