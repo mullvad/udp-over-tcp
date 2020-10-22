@@ -77,17 +77,22 @@ async fn process_udp2tcp(
     mut udp_in: UdpRecvHalf,
     mut tcp_out: TcpWriteHalf,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut buffer = [0u8; 2 + MAX_DATAGRAM_SIZE];
+    let mut buffer = [0u8; MAX_DATAGRAM_SIZE];
     loop {
         let udp_read_len = udp_in
             .recv(&mut buffer[2..])
             .await
             .context("Failed reading from UDP")?;
         if udp_read_len == 0 {
+            log::info!("UDP socket closed");
             break;
         }
-        let datagram_len = u16::try_from(udp_read_len).unwrap();
+
+        // Set the "header" to the length of the datagram.
+        let datagram_len =
+            u16::try_from(udp_read_len).expect("UDP datagram can't be larger than 2^16");
         buffer[..2].copy_from_slice(&datagram_len.to_be_bytes()[..]);
+
         tcp_out
             .write_all(&buffer[..2 + udp_read_len])
             .await

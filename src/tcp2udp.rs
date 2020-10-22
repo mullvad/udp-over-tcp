@@ -1,3 +1,6 @@
+//! Primitives for listening on TCP and forwarding the data in incoming connections
+//! to UDP.
+
 use err_context::{BoxedErrorExt as _, ResultExt as _};
 use std::net::{IpAddr, SocketAddr};
 use structopt::StructOpt;

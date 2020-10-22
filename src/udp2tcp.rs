@@ -1,3 +1,6 @@
+//! Primitives for listening on UDP and forwarding the data in incoming datagrams
+//! to a TCP stream.
+
 use std::convert::TryFrom;
 use std::fmt;
 use std::io;
@@ -74,6 +77,7 @@ pub struct Udp2Tcp {
 
 impl Udp2Tcp {
     /// Connects to the given TCP address and binds to the given UDP address.
+    /// Just calling this constructor won't forward any traffic over the sockets (see `run`).
     pub async fn new(
         udp_listen_addr: SocketAddr,
         tcp_forward_addr: SocketAddr,
@@ -103,27 +107,42 @@ impl Udp2Tcp {
     }
 
     /// Returns the UDP address this instance is listening on for incoming datagrams to forward.
+    ///
+    /// Useful to call if `Udp2Tcp::new` was given port zero in `udp_listen_addr` to let the OS
+    /// pick a random port. Then this method will return the actual port it is now bound to.
     pub fn local_udp_addr(&self) -> io::Result<SocketAddr> {
         self.udp_socket.local_addr()
     }
 
-    /// Runs the forwarding until one of the sockets is closed.
+    /// Runs the forwarding until one of the sockets are closed.
     pub async fn run(mut self) -> Result<(), ForwardError> {
         let mut buffer = [0u8; u16::MAX as usize];
+
+        // Read the first incoming UDP packet.
         let (udp_read_len, udp_peer_addr) = self
             .udp_socket
+            // First two bytes reserved for datagram length header
             .recv_from(&mut buffer[2..])
             .await
             .map_err(ForwardError::ReadUdp)?;
-        log::info!("Incoming connection from {}/UDP", udp_peer_addr,);
+        log::info!("Incoming connection from {}/UDP", udp_peer_addr);
+        if udp_read_len == 0 {
+            log::info!("UDP socket closed");
+            return Ok(());
+        }
 
+        // Connect the UDP socket to whoever sent the first packet. Allows us to process
+        // data from a single client.
         self.udp_socket
             .connect(udp_peer_addr)
             .await
             .map_err(ForwardError::ConnectUdp)?;
 
-        let datagram_len = u16::try_from(udp_read_len).unwrap();
+        // Set the "header" to the length of the datagram.
+        let datagram_len =
+            u16::try_from(udp_read_len).expect("UDP datagram can't be larger than 2^16");
         buffer[..2].copy_from_slice(&datagram_len.to_be_bytes()[..]);
+
         self.tcp_stream
             .write_all(&buffer[..2 + udp_read_len])
             .await
