@@ -81,16 +81,16 @@ impl Udp2Tcp {
     pub async fn new(
         udp_listen_addr: SocketAddr,
         tcp_forward_addr: SocketAddr,
-        tcp_options: Option<&crate::TcpOptions>,
+        //tcp_options: Option<&crate::TcpOptions>,
     ) -> Result<Self, ConnectError> {
         let tcp_stream = TcpStream::connect(tcp_forward_addr)
             .await
             .map_err(ConnectError::ConnectTcp)?;
         log::info!("Connected to {}/TCP", tcp_forward_addr);
-        if let Some(tcp_options) = tcp_options {
-            crate::tcp_options::apply(&tcp_stream, tcp_options)
-                .map_err(ConnectError::ApplyTcpOptions)?;
-        }
+        // if let Some(tcp_options) = tcp_options {
+        //     crate::tcp_options::apply(&tcp_stream, tcp_options)
+        //         .map_err(ConnectError::ApplyTcpOptions)?;
+        // }
 
         let udp_socket = UdpSocket::bind(udp_listen_addr)
             .await

@@ -19,14 +19,14 @@ fn main() {
     env_logger::init();
     let options = Options::from_args();
 
-    let mut rt_builder = tokio::runtime::Builder::new();
-    rt_builder.threaded_scheduler().enable_all();
+    let mut runtime = tokio::runtime::Builder::new_multi_thread();
+    runtime.enable_io();
     if let Some(threads) = options.threads {
         log::info!("Using {} threads", threads);
         let threads = usize::from(threads.get());
-        rt_builder.core_threads(threads).max_threads(threads);
+        runtime.worker_threads(threads);
     }
-    let result = rt_builder
+    let result = runtime
         .build()
         .expect("Failed to build async runtime")
         .block_on(tcp2udp::run(options.tcp2udp_options));

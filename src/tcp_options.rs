@@ -1,6 +1,6 @@
 use std::fmt;
 use std::io;
-use tokio::net::TcpStream;
+// use tokio::net::TcpStream;
 
 /// Options to apply to the TCP socket involved in the tunneling.
 #[derive(Debug, structopt::StructOpt)]
@@ -57,38 +57,38 @@ impl std::error::Error for ApplyTcpOptionsError {
     }
 }
 
-/// Applies the given options to the given TCP socket.
-pub fn apply(tcp_stream: &TcpStream, options: &TcpOptions) -> Result<(), ApplyTcpOptionsError> {
-    tcp_stream
-        .set_nodelay(options.nodelay)
-        .map_err(ApplyTcpOptionsError::NoDelay)?;
-    log::debug!(
-        "TCP_NODELAY: {}",
-        tcp_stream
-            .nodelay()
-            .map_err(ApplyTcpOptionsError::NoDelay)?
-    );
-    if let Some(recv_buffer_size) = options.recv_buffer_size {
-        tcp_stream
-            .set_recv_buffer_size(recv_buffer_size)
-            .map_err(ApplyTcpOptionsError::RecvBuffer)?;
-    }
-    log::debug!(
-        "SO_RCVBUF: {}",
-        tcp_stream
-            .recv_buffer_size()
-            .map_err(ApplyTcpOptionsError::RecvBuffer)?
-    );
-    if let Some(send_buffer_size) = options.send_buffer_size {
-        tcp_stream
-            .set_send_buffer_size(send_buffer_size)
-            .map_err(ApplyTcpOptionsError::SendBuffer)?;
-    }
-    log::debug!(
-        "SO_SNDBUF: {}",
-        tcp_stream
-            .send_buffer_size()
-            .map_err(ApplyTcpOptionsError::SendBuffer)?
-    );
-    Ok(())
-}
+// /// Applies the given options to the given TCP socket.
+// pub fn apply(tcp_stream: &TcpStream, options: &TcpOptions) -> Result<(), ApplyTcpOptionsError> {
+//     tcp_stream
+//         .set_nodelay(options.nodelay)
+//         .map_err(ApplyTcpOptionsError::NoDelay)?;
+//     log::debug!(
+//         "TCP_NODELAY: {}",
+//         tcp_stream
+//             .nodelay()
+//             .map_err(ApplyTcpOptionsError::NoDelay)?
+//     );
+//     if let Some(recv_buffer_size) = options.recv_buffer_size {
+//         tcp_stream
+//             .set_recv_buffer_size(recv_buffer_size)
+//             .map_err(ApplyTcpOptionsError::RecvBuffer)?;
+//     }
+//     log::debug!(
+//         "SO_RCVBUF: {}",
+//         tcp_stream
+//             .recv_buffer_size()
+//             .map_err(ApplyTcpOptionsError::RecvBuffer)?
+//     );
+//     if let Some(send_buffer_size) = options.send_buffer_size {
+//         tcp_stream
+//             .set_send_buffer_size(send_buffer_size)
+//             .map_err(ApplyTcpOptionsError::SendBuffer)?;
+//     }
+//     log::debug!(
+//         "SO_SNDBUF: {}",
+//         tcp_stream
+//             .send_buffer_size()
+//             .map_err(ApplyTcpOptionsError::SendBuffer)?
+//     );
+//     Ok(())
+// }

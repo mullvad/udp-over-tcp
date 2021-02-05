@@ -4,7 +4,8 @@ use futures::future::{abortable, select, Either};
 use std::convert::TryFrom;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::tcp::{OwnedReadHalf as TcpReadHalf, OwnedWriteHalf as TcpWriteHalf};
-use tokio::net::udp::{RecvHalf as UdpRecvHalf, SendHalf as UdpSendHalf};
+//use tokio::net::udp::{RecvHalf as UdpRecvHalf, SendHalf as UdpSendHalf};
+use std::sync::Arc;
 use tokio::net::{TcpStream, UdpSocket};
 
 const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
@@ -13,7 +14,8 @@ const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
 /// This async function runs until one of the sockets are closed or there is an error.
 /// Both sockets are closed before returning.
 pub async fn process_udp_over_tcp(udp_socket: UdpSocket, tcp_stream: TcpStream) {
-    let (udp_in, udp_out) = udp_socket.split();
+    let udp_in = Arc::new(udp_socket);
+    let udp_out = udp_in.clone();
     let (tcp_in, tcp_out) = tcp_stream.into_split();
 
     let (tcp2udp_future, tcp2udp_abort) = abortable(async move {
@@ -43,12 +45,13 @@ pub async fn process_udp_over_tcp(udp_socket: UdpSocket, tcp_stream: TcpStream) 
 
 async fn process_tcp2udp(
     tcp_in: TcpReadHalf,
-    mut udp_out: UdpSendHalf,
+    udp_out: Arc<UdpSocket>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let tcp_recv_buffer_size = tcp_in
-        .as_ref()
-        .recv_buffer_size()
-        .context("Failed getting SO_RCVBUF")?;
+    // let tcp_recv_buffer_size = tcp_in
+    //     .as_ref()
+    //     .recv_buffer_size()
+    //     .context("Failed getting SO_RCVBUF")?;
+    let tcp_recv_buffer_size = usize::from(u16::MAX);
     let mut tcp_in = BufReader::with_capacity(tcp_recv_buffer_size, tcp_in);
     let mut buffer = [0u8; MAX_DATAGRAM_SIZE];
     loop {
@@ -74,7 +77,7 @@ async fn process_tcp2udp(
 }
 
 async fn process_udp2tcp(
-    mut udp_in: UdpRecvHalf,
+    udp_in: Arc<UdpSocket>,
     mut tcp_out: TcpWriteHalf,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = [0u8; MAX_DATAGRAM_SIZE];

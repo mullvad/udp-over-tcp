@@ -22,7 +22,7 @@ pub struct Options {
 }
 
 pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
-    let mut tcp_listener = TcpListener::bind(options.tcp_listen_addr)
+    let tcp_listener = TcpListener::bind(options.tcp_listen_addr)
         .await
         .with_context(|_| {
             format!(
@@ -36,7 +36,7 @@ pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         match tcp_listener.accept().await {
             Ok((tcp_stream, tcp_peer_addr)) => {
                 log::debug!("Incoming connection from {}/TCP", tcp_peer_addr);
-                crate::tcp_options::apply(&tcp_stream, &options.tcp_options)?;
+                //crate::tcp_options::apply(&tcp_stream, &options.tcp_options)?;
 
                 let udp_bind_ip = options.udp_bind_ip;
                 let udp_forward_addr = options.udp_forward_addr;
