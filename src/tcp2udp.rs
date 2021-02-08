@@ -4,7 +4,7 @@
 use err_context::{BoxedErrorExt as _, ResultExt as _};
 use std::net::{IpAddr, SocketAddr};
 use structopt::StructOpt;
-use tokio::net::{TcpListener, TcpStream, UdpSocket};
+use tokio::net::{TcpSocket, TcpStream, UdpSocket};
 
 #[derive(Debug, StructOpt)]
 pub struct Options {
@@ -22,21 +22,25 @@ pub struct Options {
 }
 
 pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
-    let tcp_listener = TcpListener::bind(options.tcp_listen_addr)
-        .await
-        .with_context(|_| {
-            format!(
-                "Failed to bind a TCP listener to {}",
-                options.tcp_listen_addr
-            )
-        })?;
+    let tcp_socket = match options.tcp_listen_addr {
+        SocketAddr::V4(..) => TcpSocket::new_v4(),
+        SocketAddr::V6(..) => TcpSocket::new_v6(),
+    }
+    .context("Failed to create new TCP socket")?;
+    crate::tcp_options::apply(&tcp_socket, &options.tcp_options)?;
+    tcp_socket
+        .set_reuseaddr(true)
+        .context("Failed to set SO_REUSEADDR on TCP socket")?;
+    tcp_socket
+        .bind(options.tcp_listen_addr)
+        .with_context(|_| format!("Failed to bind TCP socket to {}", options.tcp_listen_addr))?;
+    let tcp_listener = tcp_socket.listen(1024)?;
     log::info!("Listening on {}/TCP", tcp_listener.local_addr().unwrap());
 
     loop {
         match tcp_listener.accept().await {
             Ok((tcp_stream, tcp_peer_addr)) => {
                 log::debug!("Incoming connection from {}/TCP", tcp_peer_addr);
-                //crate::tcp_options::apply(&tcp_stream, &options.tcp_options)?;
 
                 let udp_bind_ip = options.udp_bind_ip;
                 let udp_forward_addr = options.udp_forward_addr;

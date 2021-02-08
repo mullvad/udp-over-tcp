@@ -6,10 +6,12 @@ use std::fmt;
 use std::io;
 use std::net::SocketAddr;
 use tokio::io::AsyncWriteExt;
-use tokio::net::{TcpStream, UdpSocket};
+use tokio::net::{TcpSocket, TcpStream, UdpSocket};
 
 #[derive(Debug)]
 pub enum ConnectError {
+    /// Failed to create the TCP socket.
+    CreateTcpSocket(io::Error),
     /// Failed to connect to TCP forward address.
     ConnectTcp(io::Error),
     /// Failed to apply the given TCP socket options.
@@ -22,6 +24,7 @@ impl fmt::Display for ConnectError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use ConnectError::*;
         match self {
+            CreateTcpSocket(_) => "Failed to create the TCP socket".fmt(f),
             ConnectTcp(_) => "Failed to connect to TCP forward address".fmt(f),
             ApplyTcpOptions(e) => e.fmt(f),
             BindUdp(_) => "Failed to bind UDP socket locally".fmt(f),
@@ -33,6 +36,7 @@ impl std::error::Error for ConnectError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         use ConnectError::*;
         match self {
+            CreateTcpSocket(e) => Some(e),
             ConnectTcp(e) => Some(e),
             ApplyTcpOptions(e) => e.source(),
             BindUdp(e) => Some(e),
@@ -81,16 +85,23 @@ impl Udp2Tcp {
     pub async fn new(
         udp_listen_addr: SocketAddr,
         tcp_forward_addr: SocketAddr,
-        //tcp_options: Option<&crate::TcpOptions>,
+        tcp_options: Option<&crate::TcpOptions>,
     ) -> Result<Self, ConnectError> {
-        let tcp_stream = TcpStream::connect(tcp_forward_addr)
+        let tcp_socket = match tcp_forward_addr {
+            SocketAddr::V4(..) => TcpSocket::new_v4(),
+            SocketAddr::V6(..) => TcpSocket::new_v6(),
+        }
+        .map_err(ConnectError::CreateTcpSocket)?;
+        if let Some(tcp_options) = tcp_options {
+            crate::tcp_options::apply(&tcp_socket, tcp_options)
+                .map_err(ConnectError::ApplyTcpOptions)?;
+        }
+
+        let tcp_stream = tcp_socket
+            .connect(tcp_forward_addr)
             .await
             .map_err(ConnectError::ConnectTcp)?;
         log::info!("Connected to {}/TCP", tcp_forward_addr);
-        // if let Some(tcp_options) = tcp_options {
-        //     crate::tcp_options::apply(&tcp_stream, tcp_options)
-        //         .map_err(ConnectError::ApplyTcpOptions)?;
-        // }
 
         let udp_socket = UdpSocket::bind(udp_listen_addr)
             .await
