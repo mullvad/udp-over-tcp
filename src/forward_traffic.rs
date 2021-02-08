@@ -3,6 +3,7 @@ use err_context::ResultExt as _;
 use futures::future::{abortable, select, Either};
 use std::convert::TryFrom;
 use std::mem;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf as TcpReadHalf, OwnedWriteHalf as TcpWriteHalf};
@@ -10,8 +11,6 @@ use tokio::net::{TcpStream, UdpSocket};
 
 const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
 const HEADER_LEN: usize = mem::size_of::<u16>();
-
-type Error = err_context::Context<&'static str, std::io::Error>;
 
 /// Forward traffic between the given UDP and TCP sockets in both directions.
 /// This async function runs until one of the sockets are closed or there is an error.
@@ -51,52 +50,35 @@ async fn process_tcp2udp(
     udp_out: Arc<UdpSocket>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = [0u8; MAX_DATAGRAM_SIZE];
-    let mut tcp_read_len = 0;
+    let mut buffer_i = 0;
     loop {
-        log::trace!("Beginning processing round with tcp_read_len={}", tcp_read_len);
-        // Read at least the entire header
-        if tcp_read_len < HEADER_LEN {
-            tcp_read_len += read_at_least(
-                &mut tcp_in,
-                &mut buffer[tcp_read_len..],
-                HEADER_LEN - tcp_read_len,
-            )
-            .await?;
-            if tcp_read_len < HEADER_LEN {
-                break;
-            }
-        }
-        // "parse" the header
-        let header = <[u8; HEADER_LEN]>::try_from(&buffer[..HEADER_LEN]).unwrap();
-        let datagram0_len = usize::from(u16::from_be_bytes(header));
-        let datagram0_end = HEADER_LEN + datagram0_len;
-
-        // Read at least the entire datagram after the header
-        if tcp_read_len < datagram0_end {
-            let remaining_len = datagram0_end - tcp_read_len;
-            tcp_read_len +=
-                read_at_least(&mut tcp_in, &mut buffer[tcp_read_len..], remaining_len).await?;
-        }
-        if tcp_read_len < datagram0_end {
+        log::trace!("Beginning processing round with buffer_i={}", buffer_i);
+        let tcp_read_len = tcp_in
+            .read(&mut buffer[buffer_i..])
+            .await
+            .context("Failed reading from TCP")?;
+        if tcp_read_len == 0 {
+            log::trace!("TCP EOF");
             break;
         }
+        buffer_i += tcp_read_len;
 
-        let consumed_len = forward_datagrams_in_buffer(&udp_out, &buffer[..tcp_read_len]).await?;
+        let processed_bytes = forward_datagrams_in_buffer(&udp_out, &buffer[..buffer_i]).await?;
 
         // If we have read data that was not forwarded, because it was not a complete datagram,
         // move it to the start of the buffer and start over
-        if tcp_read_len > consumed_len {
-            let bytes_left = tcp_read_len - consumed_len;
+        if buffer_i > processed_bytes {
+            let bytes_left = buffer_i - processed_bytes;
             log::warn!(
                 "Copying {}..{} (={}) remaining bytes to start of buffer",
-                consumed_len,
-                tcp_read_len,
+                processed_bytes,
+                buffer_i,
                 bytes_left
             );
-            buffer.copy_within(consumed_len..tcp_read_len, 0);
-            tcp_read_len -= consumed_len;
+            buffer.copy_within(processed_bytes..buffer_i, 0);
+            buffer_i = bytes_left;
         } else {
-            tcp_read_len = 0;
+            buffer_i = 0;
         }
     }
     log::info!("TCP socket closed");
@@ -107,6 +89,7 @@ async fn forward_datagrams_in_buffer(
     udp_out: &UdpSocket,
     buf: &[u8],
 ) -> Result<usize, Box<dyn std::error::Error>> {
+    static TCP2UDP_BYTES: AtomicUsize = AtomicUsize::new(0);
     let mut header_start = 0;
     let mut datagram_count = 0;
     loop {
@@ -140,12 +123,14 @@ async fn forward_datagrams_in_buffer(
             udp_write_len, datagram_len,
             "Did not send entire UDP datagram"
         );
+        let total = TCP2UDP_BYTES.fetch_add(udp_write_len, Ordering::Relaxed) + udp_write_len;
         log::trace!(
-            "Forwarding {} byte TCP->UDP {}..{} (datagram #{})",
+            "Forwarded {} byte TCP->UDP {}..{} (datagram #{}, total: {})",
             datagram_len,
             datagram_start,
             datagram_end,
             datagram_count,
+            total,
         );
 
         header_start = datagram_end;
@@ -153,33 +138,11 @@ async fn forward_datagrams_in_buffer(
     }
 }
 
-async fn read_at_least(
-    tcp_in: &mut TcpReadHalf,
-    buf: &mut [u8],
-    len: usize,
-) -> Result<usize, Error> {
-    assert!(len < buf.len());
-    let mut bytes_read = 0;
-    while bytes_read < len {
-        let tcp_read_len = tcp_in
-            .read(&mut buf[bytes_read..])
-            .await
-            .context("Failed reading from TCP")?;
-        if tcp_read_len == 0 {
-            // EOF
-            log::trace!("TCP EOF");
-            break;
-        }
-        bytes_read += tcp_read_len;
-        log::trace!("TCP read {}/{} bytes", bytes_read, len);
-    }
-    Ok(bytes_read)
-}
-
 async fn process_udp2tcp(
     udp_in: Arc<UdpSocket>,
     mut tcp_out: TcpWriteHalf,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    static UDP2TCP_BYTES: AtomicUsize = AtomicUsize::new(0);
     let mut buffer = [0u8; MAX_DATAGRAM_SIZE];
     loop {
         let udp_read_len = udp_in
@@ -200,7 +163,13 @@ async fn process_udp2tcp(
             .write_all(&buffer[..HEADER_LEN + udp_read_len])
             .await
             .context("Failed writing to TCP")?;
-        log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
+
+        let total = UDP2TCP_BYTES.fetch_add(udp_read_len, Ordering::Relaxed) + udp_read_len;
+        log::trace!(
+            "Forwarded {} (total: {}) bytes UDP->TCP",
+            udp_read_len,
+            total
+        );
     }
     Ok(())
 }
