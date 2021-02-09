@@ -9,8 +9,10 @@ use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 #[derive(Debug, StructOpt)]
 pub struct Options {
     /// The IP and TCP port to listen to for incoming traffic from udp2tcp.
+    #[structopt(long = "tcp-listen")]
     pub tcp_listen_addr: SocketAddr,
 
+    #[structopt(long = "udp-forward")]
     /// The IP and UDP port to forward all traffic to.
     pub udp_forward_addr: SocketAddr,
 

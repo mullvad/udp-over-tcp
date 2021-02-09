@@ -8,9 +8,11 @@ use udp_over_tcp::udp2tcp;
 #[structopt(name = "udp2tcp", about = "Listen for incoming UDP and forward to TCP")]
 pub struct Options {
     /// The IP and UDP port to bind to and accept incoming connections on.
+    #[structopt(long = "udp-listen")]
     pub udp_listen_addr: SocketAddr,
 
     /// The IP and TCP port to forward all UDP traffic to.
+    #[structopt(long = "tcp-forward")]
     pub tcp_forward_addr: SocketAddr,
 
     #[structopt(flatten)]
