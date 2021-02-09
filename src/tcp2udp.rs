@@ -10,7 +10,7 @@ use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 pub struct Options {
     /// The IP and TCP port to listen to for incoming traffic from udp2tcp.
     #[structopt(long = "tcp-listen")]
-    pub tcp_listen_addr: SocketAddr,
+    pub tcp_listen_addrs: Vec<SocketAddr>,
 
     #[structopt(long = "udp-forward")]
     /// The IP and UDP port to forward all traffic to.
@@ -25,28 +25,22 @@ pub struct Options {
 }
 
 pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
-    let tcp_listener = create_listening_socket(options.tcp_listen_addr, &options.tcp_options)?;
-    log::info!("Listening on {}/TCP", tcp_listener.local_addr().unwrap());
-
-    loop {
-        match tcp_listener.accept().await {
-            Ok((tcp_stream, tcp_peer_addr)) => {
-                log::debug!("Incoming connection from {}/TCP", tcp_peer_addr);
-
-                let udp_bind_ip = options.udp_bind_ip;
-                let udp_forward_addr = options.udp_forward_addr;
-                tokio::spawn(async move {
-                    if let Err(error) =
-                        process_socket(tcp_stream, tcp_peer_addr, udp_bind_ip, udp_forward_addr)
-                            .await
-                    {
-                        log::error!("Error: {}", error.display("\nCaused by: "));
-                    }
-                });
-            }
-            Err(error) => log::error!("Error when accepting incoming TCP connection: {}", error),
-        }
+    if options.tcp_listen_addrs.is_empty() {
+        todo!("Properly handle no TCP listening addresses given");
     }
+    let mut join_handles = Vec::with_capacity(options.tcp_listen_addrs.len());
+    for tcp_listen_addr in options.tcp_listen_addrs {
+        let tcp_listener = create_listening_socket(tcp_listen_addr, &options.tcp_options)?;
+        log::info!("Listening on {}/TCP", tcp_listener.local_addr().unwrap());
+
+        let udp_bind_ip = options.udp_bind_ip;
+        let udp_forward_addr = options.udp_forward_addr;
+        join_handles.push(tokio::spawn(async move {
+            process_tcp_listener(tcp_listener, udp_bind_ip, udp_forward_addr).await;
+        }));
+    }
+    futures::future::join_all(join_handles).await;
+    Ok(())
 }
 
 fn create_listening_socket(
@@ -68,6 +62,32 @@ fn create_listening_socket(
     let tcp_listener = tcp_socket.listen(1024)?;
 
     Ok(tcp_listener)
+}
+
+async fn process_tcp_listener(
+    tcp_listener: TcpListener,
+    udp_bind_ip: IpAddr,
+    udp_forward_addr: SocketAddr,
+) {
+    loop {
+        match tcp_listener.accept().await {
+            Ok((tcp_stream, tcp_peer_addr)) => {
+                log::debug!("Incoming connection from {}/TCP", tcp_peer_addr);
+
+                let udp_bind_ip = udp_bind_ip;
+                let udp_forward_addr = udp_forward_addr;
+                tokio::spawn(async move {
+                    if let Err(error) =
+                        process_socket(tcp_stream, tcp_peer_addr, udp_bind_ip, udp_forward_addr)
+                            .await
+                    {
+                        log::error!("Error: {}", error.display("\nCaused by: "));
+                    }
+                });
+            }
+            Err(error) => log::error!("Error when accepting incoming TCP connection: {}", error),
+        }
+    }
 }
 
 async fn process_socket(
