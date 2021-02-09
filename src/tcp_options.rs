@@ -3,7 +3,7 @@ use std::io;
 use tokio::net::TcpSocket;
 
 /// Options to apply to the TCP socket involved in the tunneling.
-#[derive(Debug, structopt::StructOpt)]
+#[derive(Debug, Default, Clone, structopt::StructOpt)]
 pub struct TcpOptions {
     /// If given, sets the SO_RCVBUF option on the TCP socket to the given number of bytes.
     /// Changes the size of the operating system's receive buffer associated with the socket.
