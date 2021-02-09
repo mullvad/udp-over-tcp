@@ -4,7 +4,7 @@
 use err_context::{BoxedErrorExt as _, ResultExt as _};
 use std::net::{IpAddr, SocketAddr};
 use structopt::StructOpt;
-use tokio::net::{TcpSocket, TcpStream, UdpSocket};
+use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 
 #[derive(Debug, StructOpt)]
 pub struct Options {
@@ -14,6 +14,7 @@ pub struct Options {
     /// The IP and UDP port to forward all traffic to.
     pub udp_forward_addr: SocketAddr,
 
+    /// Which local IP to bind the UDP socket to.
     #[structopt(long = "udp-bind", default_value = "0.0.0.0")]
     pub udp_bind_ip: IpAddr,
 
@@ -22,19 +23,7 @@ pub struct Options {
 }
 
 pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
-    let tcp_socket = match options.tcp_listen_addr {
-        SocketAddr::V4(..) => TcpSocket::new_v4(),
-        SocketAddr::V6(..) => TcpSocket::new_v6(),
-    }
-    .context("Failed to create new TCP socket")?;
-    crate::tcp_options::apply(&tcp_socket, &options.tcp_options)?;
-    tcp_socket
-        .set_reuseaddr(true)
-        .context("Failed to set SO_REUSEADDR on TCP socket")?;
-    tcp_socket
-        .bind(options.tcp_listen_addr)
-        .with_context(|_| format!("Failed to bind TCP socket to {}", options.tcp_listen_addr))?;
-    let tcp_listener = tcp_socket.listen(1024)?;
+    let tcp_listener = create_listening_socket(options.tcp_listen_addr, &options.tcp_options)?;
     log::info!("Listening on {}/TCP", tcp_listener.local_addr().unwrap());
 
     loop {
@@ -56,6 +45,27 @@ pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
             Err(error) => log::error!("Error when accepting incoming TCP connection: {}", error),
         }
     }
+}
+
+fn create_listening_socket(
+    addr: SocketAddr,
+    options: &crate::tcp_options::TcpOptions,
+) -> Result<TcpListener, Box<dyn std::error::Error>> {
+    let tcp_socket = match addr {
+        SocketAddr::V4(..) => TcpSocket::new_v4(),
+        SocketAddr::V6(..) => TcpSocket::new_v6(),
+    }
+    .context("Failed to create new TCP socket")?;
+    crate::tcp_options::apply(&tcp_socket, options)?;
+    tcp_socket
+        .set_reuseaddr(true)
+        .context("Failed to set SO_REUSEADDR on TCP socket")?;
+    tcp_socket
+        .bind(addr)
+        .with_context(|_| format!("Failed to bind TCP socket to {}", addr))?;
+    let tcp_listener = tcp_socket.listen(1024)?;
+
+    Ok(tcp_listener)
 }
 
 async fn process_socket(
