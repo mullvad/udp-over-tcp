@@ -57,7 +57,6 @@ async fn process_tcp2udp(
             .await
             .context("Failed reading from TCP")?;
         if tcp_read_len == 0 {
-            log::debug!("TCP socket closed");
             break;
         }
         unprocessed_i += tcp_read_len;
@@ -71,7 +70,7 @@ async fn process_tcp2udp(
         }
         unprocessed_i -= processed_i;
     }
-    log::info!("TCP socket closed");
+    log::debug!("TCP socket closed");
     Ok(())
 }
 
@@ -108,7 +107,7 @@ async fn forward_datagrams_in_buffer(
             udp_write_len, datagram_len,
             "Did not send entire UDP datagram"
         );
-        log::debug!("Forwarded {} byte TCP->UDP", datagram_len);
+        log::trace!("Forwarded {} byte TCP->UDP", datagram_len);
 
         header_start = datagram_end;
     }
@@ -125,7 +124,6 @@ async fn process_udp2tcp(
             .await
             .context("Failed reading from UDP")?;
         if udp_read_len == 0 {
-            log::info!("UDP socket closed");
             break;
         }
 
@@ -139,7 +137,8 @@ async fn process_udp2tcp(
             .await
             .context("Failed writing to TCP")?;
 
-        log::debug!("Forwarded {} bytes UDP->TCP", udp_read_len);
+        log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
     }
+    log::debug!("UDP socket closed");
     Ok(())
 }
