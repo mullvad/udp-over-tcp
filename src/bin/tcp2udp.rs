@@ -1,4 +1,5 @@
 use err_context::BoxedErrorExt as _;
+use std::num::NonZeroU8;
 use structopt::StructOpt;
 
 use udp_over_tcp::tcp2udp;
@@ -9,7 +10,7 @@ pub struct Options {
     /// Sets the number of worker threads to use.
     /// The default value is the number of cores available to the system.
     #[structopt(long = "threads")]
-    threads: Option<std::num::NonZeroU8>,
+    threads: Option<NonZeroU8>,
 
     #[structopt(flatten)]
     tcp2udp_options: tcp2udp::Options,
@@ -19,13 +20,21 @@ fn main() {
     env_logger::init();
     let options = Options::from_args();
 
-    let mut runtime = tokio::runtime::Builder::new_multi_thread();
+    let mut runtime = match options.threads.map(NonZeroU8::get) {
+        Some(1) => {
+            log::info!("Using a single thread");
+            tokio::runtime::Builder::new_current_thread()
+        }
+        Some(threads) => {
+            let mut runtime = tokio::runtime::Builder::new_multi_thread();
+            log::info!("Using {} threads", threads);
+            runtime.worker_threads(usize::from(threads));
+            runtime
+        }
+        None => tokio::runtime::Builder::new_multi_thread(),
+    };
     runtime.enable_io();
-    if let Some(threads) = options.threads {
-        log::info!("Using {} threads", threads);
-        let threads = usize::from(threads.get());
-        runtime.worker_threads(threads);
-    }
+
     let result = runtime
         .build()
         .expect("Failed to build async runtime")
