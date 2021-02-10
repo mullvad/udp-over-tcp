@@ -13,7 +13,7 @@ After=network-online.target
 
 [Service]
 Environment=RUST_LOG=info
-ExecStart=/usr/local/bin/tcp2udp --threads=2 --udp-bind=127.0.0.1 0.0.0.0:443 127.0.0.1:51820
+ExecStart=/usr/local/bin/tcp2udp --threads=2 --tcp-listen 0.0.0.0:443 --udp-bind=127.0.0.1 --udp-forward 127.0.0.1:51820
 Restart=always
 RestartSec=2
 
