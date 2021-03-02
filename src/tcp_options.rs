@@ -1,5 +1,9 @@
+#[cfg(target_os = "linux")]
+use nix::sys::socket::{getsockopt, setsockopt, sockopt};
 use std::fmt;
 use std::io;
+#[cfg(target_os = "linux")]
+use std::os::unix::io::AsRawFd;
 use tokio::net::TcpStream;
 
 /// Options to apply to the TCP socket involved in the tunneling.
@@ -20,6 +24,11 @@ pub struct TcpOptions {
     /// Changes the size of the operating system's send buffer associated with the socket.
     #[structopt(long = "send-buffer")]
     pub send_buffer_size: Option<usize>,
+
+    /// If given, sets the SO_MARK option on the TCP socket.
+    #[cfg(target_os = "linux")]
+    #[structopt(long = "fwmark")]
+    pub fwmark: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -32,6 +41,10 @@ pub enum ApplyTcpOptionsError {
 
     /// Failed to get/set TCP_SNDBUF
     SendBuffer(io::Error),
+
+    /// Failed to get/set SO_MARK
+    #[cfg(target_os = "linux")]
+    Mark(nix::Error),
 }
 
 impl fmt::Display for ApplyTcpOptionsError {
@@ -41,6 +54,8 @@ impl fmt::Display for ApplyTcpOptionsError {
             NoDelay(_) => "Failed to get/set TCP_NODELAY",
             RecvBuffer(_) => "Failed to get/set TCP_RCVBUF",
             SendBuffer(_) => "Failed to get/set TCP_SNDBUF",
+            #[cfg(target_os = "linux")]
+            Mark(_) => "Failed to get/set SO_MARK",
         }
         .fmt(f)
     }
@@ -53,6 +68,8 @@ impl std::error::Error for ApplyTcpOptionsError {
             NoDelay(e) => Some(e),
             RecvBuffer(e) => Some(e),
             SendBuffer(e) => Some(e),
+            #[cfg(target_os = "linux")]
+            Mark(e) => Some(e),
         }
     }
 }
@@ -90,5 +107,16 @@ pub fn apply(tcp_stream: &TcpStream, options: &TcpOptions) -> Result<(), ApplyTc
             .send_buffer_size()
             .map_err(ApplyTcpOptionsError::SendBuffer)?
     );
+    #[cfg(target_os = "linux")]
+    {
+        let fd = tcp_stream.as_raw_fd();
+        if let Some(fwmark) = options.fwmark {
+            setsockopt(fd, sockopt::Mark, &fwmark).map_err(ApplyTcpOptionsError::Mark)?;
+        }
+        log::debug!(
+            "SO_MARK: {}",
+            getsockopt(fd, sockopt::Mark).map_err(ApplyTcpOptionsError::Mark)?
+        );
+    }
     Ok(())
 }
