@@ -83,6 +83,14 @@ impl Udp2Tcp {
         tcp_forward_addr: SocketAddr,
         tcp_options: Option<&crate::TcpOptions>,
     ) -> Result<Self, ConnectError> {
+        #[cfg(target_os = "linux")]
+        let tcp_stream = create_stream_with_mark(
+            tcp_forward_addr,
+            tcp_options.map(|opt| opt.fwmark).flatten(),
+        )
+        .await
+        .map_err(ConnectError::ConnectTcp)?;
+        #[cfg(not(target_os = "linux"))]
         let tcp_stream = TcpStream::connect(tcp_forward_addr)
             .await
             .map_err(ConnectError::ConnectTcp)?;
@@ -163,4 +171,36 @@ impl Udp2Tcp {
 
         Ok(())
     }
+}
+
+// Awful workaround to set `SO_MARK` before connecting.
+#[cfg(target_os = "linux")]
+async fn create_stream_with_mark(address: SocketAddr, mark: Option<u32>) -> io::Result<TcpStream> {
+    use nix::sys::socket::*;
+    use std::net;
+    use std::os::unix::io::FromRawFd;
+
+    let family = if address.is_ipv4() {
+        AddressFamily::Inet
+    } else {
+        AddressFamily::Inet6
+    };
+    let fd = socket(
+        family,
+        SockType::Stream,
+        SockFlag::empty(),
+        SockProtocol::Tcp,
+    )
+    .map_err(|_| io::Error::last_os_error())?;
+
+    if let Some(mark) = mark {
+        setsockopt(fd, sockopt::Mark, &mark).map_err(|_| io::Error::last_os_error())?;
+    }
+
+    tokio::task::spawn_blocking(move || {
+        connect(fd, &SockAddr::Inet(InetAddr::from_std(&address)))
+            .map_err(|_| io::Error::last_os_error())
+    }).await??;
+
+    TcpStream::from_std(unsafe { net::TcpStream::from_raw_fd(fd) })
 }
