@@ -7,7 +7,7 @@ use std::os::unix::io::AsRawFd;
 use tokio::net::TcpStream;
 
 /// Options to apply to the TCP socket involved in the tunneling.
-#[derive(Debug, structopt::StructOpt)]
+#[derive(Debug, Default, structopt::StructOpt)]
 pub struct TcpOptions {
     /// Sets the TCP_NODELAY option on the TCP socket.
     /// If set to true, this option disables the Nagle algorithm.
