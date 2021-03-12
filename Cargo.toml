@@ -12,7 +12,7 @@ lto = true
 codegen-units = 1
 
 [dependencies]
-tokio = { version = "0.2.22", features = ["rt-threaded", "macros", "tcp", "udp", "io-util"] }
+tokio = { version = "0.2.22", features = ["blocking", "rt-threaded", "macros", "tcp", "udp", "io-util"] }
 err-context = "0.1.0"
 log = "0.4.11"
 env_logger = "0.7.1"
