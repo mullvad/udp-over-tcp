@@ -1,11 +1,9 @@
 //! Primitives for listening on UDP and forwarding the data in incoming datagrams
 //! to a TCP stream.
 
-use std::convert::TryFrom;
 use std::fmt;
 use std::io;
 use std::net::SocketAddr;
-use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpSocket, TcpStream, UdpSocket};
 
 #[derive(Debug)]
@@ -40,35 +38,6 @@ impl std::error::Error for ConnectError {
             ConnectTcp(e) => Some(e),
             ApplyTcpOptions(e) => e.source(),
             BindUdp(e) => Some(e),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum ForwardError {
-    ReadUdp(io::Error),
-    ConnectUdp(io::Error),
-    WriteTcp(io::Error),
-}
-
-impl fmt::Display for ForwardError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ForwardError::*;
-        match self {
-            ReadUdp(_) => "Failed receiving the first UDP datagram".fmt(f),
-            ConnectUdp(_) => "Failed to connect UDP socket to peer".fmt(f),
-            WriteTcp(_) => "Failed to write first datagram to TCP socket".fmt(f),
-        }
-    }
-}
-
-impl std::error::Error for ForwardError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use ForwardError::*;
-        match self {
-            ReadUdp(e) => Some(e),
-            ConnectUdp(e) => Some(e),
-            WriteTcp(e) => Some(e),
         }
     }
 }
@@ -133,52 +102,7 @@ impl Udp2Tcp {
     }
 
     /// Runs the forwarding until one of the sockets are closed.
-    pub async fn run(mut self) -> Result<(), ForwardError> {
-        let mut buffer = [0u8; u16::MAX as usize];
-
-        // Read the first incoming UDP packet.
-        let (udp_read_len, udp_peer_addr) = self
-            .udp_socket
-            // First two bytes reserved for datagram length header
-            .recv_from(&mut buffer[2..])
-            .await
-            .map_err(ForwardError::ReadUdp)?;
-        log::info!("Incoming connection from {}/UDP", udp_peer_addr);
-        if udp_read_len == 0 {
-            log::info!("UDP socket closed");
-            return Ok(());
-        }
-
-        // Connect the UDP socket to whoever sent the first packet. Allows us to process
-        // data from a single client.
-        self.udp_socket
-            .connect(udp_peer_addr)
-            .await
-            .map_err(ForwardError::ConnectUdp)?;
-
-        // Set the "header" to the length of the datagram.
-        let datagram_len =
-            u16::try_from(udp_read_len).expect("UDP datagram can't be larger than 2^16");
-        buffer[..2].copy_from_slice(&datagram_len.to_be_bytes()[..]);
-
-        self.tcp_stream
-            .write_all(&buffer[..2 + udp_read_len])
-            .await
-            .map_err(ForwardError::WriteTcp)?;
-        log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
-
-        let tcp_forward_addr = match self.tcp_stream.peer_addr() {
-            Ok(addr) => addr.to_string(),
-            Err(_e) => "unknown".to_owned(),
-        };
-
+    pub async fn run(self) {
         crate::forward_traffic::process_udp_over_tcp(self.udp_socket, self.tcp_stream).await;
-        log::trace!(
-            "Closing forwarding for {}/UDP <-> {}/TCP",
-            udp_peer_addr,
-            tcp_forward_addr,
-        );
-
-        Ok(())
     }
 }
