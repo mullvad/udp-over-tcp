@@ -36,6 +36,6 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         Some(options.tcp_options),
     )
     .await?;
-    udp2tcp.run().await;
+    udp2tcp.run().await?;
     Ok(())
 }

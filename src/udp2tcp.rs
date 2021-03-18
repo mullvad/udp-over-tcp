@@ -42,6 +42,32 @@ impl std::error::Error for ConnectError {
     }
 }
 
+#[derive(Debug)]
+pub enum ForwardError {
+    ReadUdp(io::Error),
+    ConnectUdp(io::Error),
+}
+
+impl fmt::Display for ForwardError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use ForwardError::*;
+        match self {
+            ReadUdp(_) => "Failed receiving the first UDP datagram".fmt(f),
+            ConnectUdp(_) => "Failed to connect UDP socket to peer".fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for ForwardError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use ForwardError::*;
+        match self {
+            ReadUdp(e) => Some(e),
+            ConnectUdp(e) => Some(e),
+        }
+    }
+}
+
 /// Struct allowing listening on UDP and forwarding the traffic over TCP.
 pub struct Udp2Tcp {
     tcp_stream: TcpStream,
@@ -101,8 +127,24 @@ impl Udp2Tcp {
         self.udp_socket.local_addr()
     }
 
-    /// Runs the forwarding until one of the sockets are closed.
-    pub async fn run(self) {
+    /// Runs the forwarding until the TCP socket is closed, or an error occur.
+    pub async fn run(self) -> Result<(), ForwardError> {
+        // Wait for the first datagram, to get the UDP peer_addr to connect to.
+        let (_udp_read_len, udp_peer_addr) = self
+            .udp_socket
+            .peek_from(&mut [0u8; crate::forward_traffic::MAX_DATAGRAM_SIZE])
+            .await
+            .map_err(ForwardError::ReadUdp)?;
+        log::info!("Incoming connection from {}/UDP", udp_peer_addr);
+
+        // Connect the UDP socket to whoever sent the first datagram. This is where
+        // all the returned traffic will be sent to.
+        self.udp_socket
+            .connect(udp_peer_addr)
+            .await
+            .map_err(ForwardError::ConnectUdp)?;
+
         crate::forward_traffic::process_udp_over_tcp(self.udp_socket, self.tcp_stream).await;
+        Ok(())
     }
 }
