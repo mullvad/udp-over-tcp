@@ -1,6 +1,7 @@
 //! Primitives for listening on TCP and forwarding the data in incoming connections
 //! to UDP.
 
+use either::Either;
 use err_context::{BoxedErrorExt as _, ResultExt as _};
 use std::net::{IpAddr, SocketAddr};
 use structopt::StructOpt;
@@ -103,14 +104,22 @@ async fn process_socket(
         .connect(udp_peer_addr)
         .await
         .with_context(|_| format!("Failed to connect UDP socket to {}", udp_peer_addr))?;
+
+    let udp_local_addr = Either::from(udp_socket.local_addr()).map_right(|_| "unknown");
+    let tcp_peer_addr = Either::from(tcp_stream.peer_addr()).map_right(|_| "unknown");
+
     log::debug!(
         "UDP socket bound to {} and connected to {}",
-        udp_socket
-            .local_addr()
-            .context("Failed getting local address for UDP socket")?,
+        udp_local_addr,
         udp_peer_addr
     );
 
     crate::forward_traffic::process_udp_over_tcp(udp_socket, tcp_stream).await;
+    log::debug!(
+        "Closing forwarding for {}/TCP <-> {}/UDP",
+        tcp_peer_addr,
+        udp_peer_addr
+    );
+
     Ok(())
 }

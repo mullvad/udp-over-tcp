@@ -1,6 +1,7 @@
 //! Primitives for listening on UDP and forwarding the data in incoming datagrams
 //! to a TCP stream.
 
+use either::Either;
 use std::fmt;
 use std::io;
 use std::net::SocketAddr;
@@ -144,7 +145,15 @@ impl Udp2Tcp {
             .await
             .map_err(ForwardError::ConnectUdp)?;
 
+        let tcp_forward_addr = Either::from(self.tcp_stream.peer_addr()).map_right(|_| "unknown");
+
         crate::forward_traffic::process_udp_over_tcp(self.udp_socket, self.tcp_stream).await;
+        log::debug!(
+            "Closing forwarding for {}/UDP <-> {}/TCP",
+            udp_peer_addr,
+            tcp_forward_addr,
+        );
+
         Ok(())
     }
 }
