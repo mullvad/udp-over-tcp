@@ -1,8 +1,8 @@
 //! Primitives for listening on TCP and forwarding the data in incoming connections
 //! to UDP.
 
-use either::Either;
 use err_context::{BoxedErrorExt as _, ResultExt as _};
+use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use structopt::StructOpt;
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
@@ -105,19 +105,25 @@ async fn process_socket(
         .await
         .with_context(|_| format!("Failed to connect UDP socket to {}", udp_peer_addr))?;
 
-    let udp_local_addr = Either::from(udp_socket.local_addr()).map_right(|_| "unknown");
-    let tcp_peer_addr = Either::from(tcp_stream.peer_addr()).map_right(|_| "unknown");
-
     log::debug!(
         "UDP socket bound to {} and connected to {}",
-        udp_local_addr,
+        udp_socket
+            .local_addr()
+            .ok()
+            .as_ref()
+            .map(|item| -> &dyn fmt::Display { &*item })
+            .unwrap_or(&"unknown"),
         udp_peer_addr
     );
 
+    let tcp_peer_addr = tcp_stream.peer_addr().ok();
     crate::forward_traffic::process_udp_over_tcp(udp_socket, tcp_stream).await;
     log::debug!(
         "Closing forwarding for {}/TCP <-> {}/UDP",
-        tcp_peer_addr,
+        tcp_peer_addr
+            .as_ref()
+            .map(|item| -> &dyn fmt::Display { &*item })
+            .unwrap_or(&"unknown"),
         udp_peer_addr
     );
 

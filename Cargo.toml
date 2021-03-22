@@ -12,7 +12,6 @@ lto = true
 codegen-units = 1
 
 [dependencies]
-either = "1.6.1"
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "net", "io-util"] }
 err-context = "0.1.0"
 log = "0.4.11"
