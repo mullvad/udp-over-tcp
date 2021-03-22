@@ -9,8 +9,9 @@ use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 
 #[derive(Debug, StructOpt)]
 pub struct Options {
-    /// The IP and TCP port to listen to for incoming traffic from udp2tcp.
-    #[structopt(long = "tcp-listen")]
+    /// The IP and TCP port(s) to listen to for incoming traffic from udp2tcp.
+    /// Supports binding multiple TCP sockets.
+    #[structopt(long = "tcp-listen", required(true))]
     pub tcp_listen_addrs: Vec<SocketAddr>,
 
     #[structopt(long = "udp-forward")]
@@ -25,10 +26,38 @@ pub struct Options {
     pub tcp_options: crate::tcp_options::TcpOptions,
 }
 
+/// Error returned from [`run`] if something goes wrong.
+#[derive(Debug)]
+pub enum Tcp2UdpError {
+    /// No TCP listen addresses given in the `Options`.
+    NoTcpListenAddrs,
+}
+
+impl fmt::Display for Tcp2UdpError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use Tcp2UdpError::*;
+        match self {
+            NoTcpListenAddrs => "Invalid options, no TCP listen addresses".fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for Tcp2UdpError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use Tcp2UdpError::*;
+        match self {
+            NoTcpListenAddrs => None,
+        }
+    }
+}
+
+/// Runs the TCP to UDP forwarding until the TCP socket is closed or an
+/// error occurs.
 pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     if options.tcp_listen_addrs.is_empty() {
-        todo!("Properly handle no TCP listening addresses given");
+        return Err(Box::new(Tcp2UdpError::NoTcpListenAddrs));
     }
+
     let mut join_handles = Vec::with_capacity(options.tcp_listen_addrs.len());
     for tcp_listen_addr in options.tcp_listen_addrs {
         let tcp_listener = create_listening_socket(tcp_listen_addr, &options.tcp_options)?;
