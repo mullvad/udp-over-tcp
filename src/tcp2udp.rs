@@ -2,6 +2,7 @@
 //! to UDP.
 
 use err_context::{BoxedErrorExt as _, ResultExt as _};
+use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use structopt::StructOpt;
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
@@ -105,19 +106,24 @@ async fn process_socket(
         .connect(udp_peer_addr)
         .await
         .with_context(|_| format!("Failed to connect UDP socket to {}", udp_peer_addr))?;
+
     log::debug!(
         "UDP socket bound to {} and connected to {}",
         udp_socket
             .local_addr()
-            .context("Failed getting local address for UDP socket")?,
+            .ok()
+            .as_ref()
+            .map(|item| -> &dyn fmt::Display { &*item })
+            .unwrap_or(&"unknown"),
         udp_peer_addr
     );
 
     crate::forward_traffic::process_udp_over_tcp(udp_socket, tcp_stream).await;
-    log::trace!(
+    log::debug!(
         "Closing forwarding for {}/TCP <-> {}/UDP",
         tcp_peer_addr,
         udp_peer_addr
     );
+
     Ok(())
 }

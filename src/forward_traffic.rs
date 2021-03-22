@@ -8,7 +8,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf as TcpReadHalf, OwnedWriteHalf as TcpWriteHalf};
 use tokio::net::{TcpStream, UdpSocket};
 
-const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
+pub const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
 const HEADER_LEN: usize = mem::size_of::<u16>();
 
 /// Forward traffic between the given UDP and TCP sockets in both directions.
@@ -123,9 +123,6 @@ async fn process_udp2tcp(
             .recv(&mut buffer[HEADER_LEN..])
             .await
             .context("Failed reading from UDP")?;
-        if udp_read_len == 0 {
-            break;
-        }
 
         // Set the "header" to the length of the datagram.
         let datagram_len =
@@ -139,6 +136,4 @@ async fn process_udp2tcp(
 
         log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
     }
-    log::debug!("UDP socket closed");
-    Ok(())
 }
