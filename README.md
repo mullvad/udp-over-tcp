@@ -1,27 +1,69 @@
 # udp-over-tcp
 
-UDP traffic in a TCP stream.
+A library (and binaries) for tunneling UDP datagrams over a TCP stream.
 
-## Installing
+Some programs/protocols only work over UDP. And some networks only allow TCP. This is where
+`udp-over-tcp` comes in handy. This library comes in two parts:
 
-See `tcp2udp.service` for server side systemd service definition.
+* `udp2tcp` - Listens to UDP datagrams and forwards them over a TCP stream. The return stream
+  is translated back to datagrams and send out over UDP. This part can be easily used as both
+  a library and a binary. So can be run standalone, but can also easily be included in other
+  Rust programs. The UDP socket is connected to the peer address of the first incoming
+  datagram. So one [`Udp2Tcp`] instance can handle traffic from a single peer only.
+* `tcp2udp` - Listens to TCP and translates any incoming data to datagrams and forward them
+  over UDP. Designed mostly to be a standalone executable to run on servers. But can be
+  consumed as a Rust library as well.
 
-## Example
+## Protocol
+
+The format of the data inside the TCP stream is very simple. Each datagram is preceded
+with a 16 bit unsigned integer in big endian byte order, specifying the length of the datagram.
+
+## tcp2udp server example
 
 Make the server listen for TCP connections that it can then forward to a local UDP service.
-This will listen on `0.0.0.0:5001/TCP` and forward anything that
-comes in to `185.213.154.69:51820/UDP`:
+This will listen on `10.0.0.1:5001/TCP` and forward anything that
+comes in to `127.0.0.1:51820/UDP`:
 ```bash
 user@server $ RUST_LOG=debug tcp2udp \
-    --tcp-listen 0.0.0.0:5001 \
-    --udp-forward 185.213.154.69:51820
+    --tcp-listen 10.0.0.0:5001 \
+    --udp-forward 127.0.0.1:51820
 ```
 
-Connect the client to the server above (assuming it lives on `10.0.0.1`) and have it listen
-for incoming UDP on `127.0.0.1:51820/UDP`:
-```bash
-user@client $ RUST_LOG=debug udp2tcp --udp-listen 127.0.0.1:51820 --tcp-forward 10.0.0.1:5001
+`RUST_LOG` can be used to set logging level. See documentation for [`env_logger`] for
+information.
+
+[`env_logger`]: https://crates.io/crates/env_logger
+
+## udp2tcp example
+
+This is one way you could integrate `udp2tcp` into your Rust program.
+This will connect a TCP socket to `1.2.3.4:9000` and bind a UDP socket to a random port
+on the loopback interface.
+It will then connect the UDP socket to the socket addr of the first incoming datagram
+and start forwarding all traffic to (and from) the TCP socket.
+
+```rust
+
+let udp_listen_addr = "127.0.0.1:0".parse().unwrap();
+let tcp_forward_addr = "1.2.3.4:9000".parse().unwrap();
+
+// Create a UDP -> TCP forwarder. This will connect the TCP socket
+// to `tcp_forward_addr`
+let udp2tcp = udp2tcp::Udp2Tcp::new(
+    udp_listen_addr,
+    tcp_forward_addr,
+    None,
+)
+.await?;
+
+// Read out which address the UDP actually bound to. Useful if you specified port
+// zero to get a random port from the OS.
+let local_udp_addr = udp2tcp.local_udp_addr()?;
+
+spin_up_some_udp_thing(local_udp_addr);
+
+// Run the forwarder until the TCP socket disconnects or an error happens.
+udp2tcp.run().await?;
 ```
 
-Now you can connect WireGuard to 127.0.0.1:51820 and have it be sent to 185.213.154.69:51820
-while having the UDP traffic first sent as TCP between `client <-> 10.0.0.1`
