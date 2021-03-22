@@ -20,7 +20,22 @@ fn main() {
     env_logger::init();
     let options = Options::from_args();
 
-    let mut runtime = match options.threads.map(NonZeroU8::get) {
+    let runtime = create_runtime(options.threads);
+
+    let result = runtime.block_on(tcp2udp::run(options.tcp2udp_options));
+    if let Err(error) = result {
+        log::error!("Error: {}", error.display("\nCaused by: "));
+        std::process::exit(1);
+    }
+}
+
+/// Creates a Tokio runtime for the process to use.
+/// Creates a single threaded runtime if `threads` is 1. If
+/// `threads` is `None` it uses the same amount of worker threads
+/// as system cores. Otheriwse it uses the specified number of worker
+/// threads.
+fn create_runtime(threads: Option<NonZeroU8>) -> tokio::runtime::Runtime {
+    let mut runtime = match threads.map(NonZeroU8::get) {
         Some(1) => {
             log::info!("Using a single thread");
             tokio::runtime::Builder::new_current_thread()
@@ -35,12 +50,5 @@ fn main() {
     };
     runtime.enable_io();
 
-    let result = runtime
-        .build()
-        .expect("Failed to build async runtime")
-        .block_on(tcp2udp::run(options.tcp2udp_options));
-    if let Err(error) = result {
-        log::error!("Error: {}", error.display("\nCaused by: "));
-        std::process::exit(1);
-    }
+    runtime.build().expect("Failed to build async runtime")
 }
