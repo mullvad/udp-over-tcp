@@ -72,6 +72,7 @@ impl std::error::Error for ForwardError {
 pub struct Udp2Tcp {
     tcp_stream: TcpStream,
     udp_socket: UdpSocket,
+    tcp_forward_addr: SocketAddr,
 }
 
 impl Udp2Tcp {
@@ -97,6 +98,7 @@ impl Udp2Tcp {
         Ok(Self {
             tcp_stream,
             udp_socket,
+            tcp_forward_addr,
         })
     }
 
@@ -144,16 +146,11 @@ impl Udp2Tcp {
             .await
             .map_err(ForwardError::ConnectUdp)?;
 
-        let tcp_forward_addr = self.tcp_stream.peer_addr().ok();
-
         crate::forward_traffic::process_udp_over_tcp(self.udp_socket, self.tcp_stream).await;
         log::debug!(
             "Closing forwarding for {}/UDP <-> {}/TCP",
             udp_peer_addr,
-            tcp_forward_addr
-                .as_ref()
-                .map(|item| -> &dyn fmt::Display { &*item })
-                .unwrap_or(&"unknown"),
+            self.tcp_forward_addr,
         );
 
         Ok(())

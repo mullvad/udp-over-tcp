@@ -79,7 +79,8 @@ async fn process_tcp_listener(
                 let udp_forward_addr = udp_forward_addr;
                 tokio::spawn(async move {
                     if let Err(error) =
-                        process_socket(tcp_stream, udp_bind_ip, udp_forward_addr).await
+                        process_socket(tcp_stream, tcp_peer_addr, udp_bind_ip, udp_forward_addr)
+                            .await
                     {
                         log::error!("Error: {}", error.display("\nCaused by: "));
                     }
@@ -92,6 +93,7 @@ async fn process_tcp_listener(
 
 async fn process_socket(
     tcp_stream: TcpStream,
+    tcp_peer_addr: SocketAddr,
     udp_bind_ip: IpAddr,
     udp_peer_addr: SocketAddr,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -116,14 +118,10 @@ async fn process_socket(
         udp_peer_addr
     );
 
-    let tcp_peer_addr = tcp_stream.peer_addr().ok();
     crate::forward_traffic::process_udp_over_tcp(udp_socket, tcp_stream).await;
     log::debug!(
         "Closing forwarding for {}/TCP <-> {}/UDP",
-        tcp_peer_addr
-            .as_ref()
-            .map(|item| -> &dyn fmt::Display { &*item })
-            .unwrap_or(&"unknown"),
+        tcp_peer_addr,
         udp_peer_addr
     );
 
