@@ -26,8 +26,10 @@ pub struct Options {
     pub tcp_options: crate::tcp_options::TcpOptions,
 }
 
+/// Error returned from [`run`] if something goes wrong.
 #[derive(Debug)]
 pub enum Tcp2UdpError {
+    /// No TCP listen addresses given in the `Options`.
     NoTcpListenAddrs,
 }
 
@@ -49,6 +51,8 @@ impl std::error::Error for Tcp2UdpError {
     }
 }
 
+/// Runs the TCP to UDP forwarding until the TCP socket is closed or an
+/// error occurs.
 pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     if options.tcp_listen_addrs.is_empty() {
         return Err(Box::new(Tcp2UdpError::NoTcpListenAddrs));
