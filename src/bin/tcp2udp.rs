@@ -30,10 +30,9 @@ fn main() {
 }
 
 /// Creates a Tokio runtime for the process to use.
-/// Creates a single threaded runtime if `threads` is 1. If
-/// `threads` is `None` it uses the same amount of worker threads
-/// as system cores. Otheriwse it uses the specified number of worker
-/// threads.
+/// If `threads` is `None` it uses the same amount of worker threads as system cores.
+/// Creates a single threaded runtime if `threads` is `Some(1)`.
+/// Otherwise it uses the specified number of worker threads.
 fn create_runtime(threads: Option<NonZeroU8>) -> tokio::runtime::Runtime {
     let mut runtime = match threads.map(NonZeroU8::get) {
         Some(1) => {
