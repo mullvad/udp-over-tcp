@@ -2,6 +2,7 @@
 //! to UDP.
 
 use err_context::{BoxedErrorExt as _, ResultExt as _};
+use std::convert::Infallible;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use structopt::StructOpt;
@@ -51,9 +52,11 @@ impl std::error::Error for Tcp2UdpError {
     }
 }
 
-/// Runs the TCP to UDP forwarding until the TCP socket is closed or an
-/// error occurs.
-pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
+/// Sets up TCP listening sockets on all addresses in `Options::tcp_listen_addrs`.
+/// If binding a listening socket fails this returns an error. Otherwise the function
+/// will continue indefinitely to accept incoming connections and forward to UDP.
+/// Errors are just logged.
+pub async fn run(options: Options) -> Result<Infallible, Box<dyn std::error::Error>> {
     if options.tcp_listen_addrs.is_empty() {
         return Err(Box::new(Tcp2UdpError::NoTcpListenAddrs));
     }
@@ -70,7 +73,7 @@ pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         }));
     }
     futures::future::join_all(join_handles).await;
-    Ok(())
+    unreachable!("Listening TCP sockets never exit");
 }
 
 fn create_listening_socket(
@@ -98,7 +101,7 @@ async fn process_tcp_listener(
     tcp_listener: TcpListener,
     udp_bind_ip: IpAddr,
     udp_forward_addr: SocketAddr,
-) {
+) -> ! {
     loop {
         match tcp_listener.accept().await {
             Ok((tcp_stream, tcp_peer_addr)) => {
@@ -118,6 +121,9 @@ async fn process_tcp_listener(
     }
 }
 
+/// Sets up a UDP socket bound to `udp_bind_ip` and connected to `udp_peer_addr` and forwards
+/// traffic between that UDP socket and the given `tcp_stream` until the `tcp_stream` is closed.
+/// `tcp_peer_addr` should be the remote addr that `tcp_stream` is connected to.
 async fn process_socket(
     tcp_stream: TcpStream,
     tcp_peer_addr: SocketAddr,

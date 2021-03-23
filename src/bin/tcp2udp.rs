@@ -27,6 +27,7 @@ fn main() {
         log::error!("Error: {}", error.display("\nCaused by: "));
         std::process::exit(1);
     }
+    unreachable!("tcp2udp never returns");
 }
 
 /// Creates a Tokio runtime for the process to use.
