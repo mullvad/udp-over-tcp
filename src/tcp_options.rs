@@ -20,6 +20,7 @@ pub struct TcpOptions {
     pub send_buffer_size: Option<u32>,
 
     /// If given, sets the SO_MARK option on the TCP socket.
+    /// This exists only on Linux.
     #[cfg(target_os = "linux")]
     #[structopt(long = "fwmark")]
     pub fwmark: Option<u32>,
