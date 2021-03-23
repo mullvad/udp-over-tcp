@@ -33,7 +33,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     let udp2tcp = udp2tcp::Udp2Tcp::new(
         options.udp_listen_addr,
         options.tcp_forward_addr,
-        Some(options.tcp_options),
+        options.tcp_options,
     )
     .await?;
     udp2tcp.run().await?;
