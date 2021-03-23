@@ -1,13 +1,21 @@
+use crate::NeverOkResult;
 use err_context::BoxedErrorExt as _;
 use err_context::ResultExt as _;
 use futures::future::{abortable, select, Either};
-use std::convert::TryFrom;
+use std::convert::{Infallible, TryFrom};
+use std::io;
 use std::mem;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf as TcpReadHalf, OwnedWriteHalf as TcpWriteHalf};
 use tokio::net::{TcpStream, UdpSocket};
 
+/// A UDP datagram header has a 16 bit field containing an unsigned integer
+/// describing the length of the datagram (including the header itself).
+/// The max value is 2^16 = 65534 bytes. But since that includes the
+/// UDP header, this constant is 8 bytes more than any UDP socket
+/// read operation would ever return. We are going to use that extra space
+/// to store our 2 byte udp-over-tcp header.
 pub const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
 const HEADER_LEN: usize = mem::size_of::<u16>();
 
@@ -25,9 +33,8 @@ pub async fn process_udp_over_tcp(udp_socket: UdpSocket, tcp_stream: TcpStream) 
         }
     });
     let (udp2tcp_future, udp2tcp_abort) = abortable(async move {
-        if let Err(error) = process_udp2tcp(udp_in, tcp_out).await {
-            log::error!("Error: {}", error.display("\nCaused by: "));
-        }
+        let error = process_udp2tcp(udp_in, tcp_out).await.into_err();
+        log::error!("Error: {}", error.display("\nCaused by: "));
     });
     let tcp2udp_join = tokio::spawn(tcp2udp_future);
     let udp2tcp_join = tokio::spawn(udp2tcp_future);
@@ -44,12 +51,14 @@ pub async fn process_udp_over_tcp(udp_socket: UdpSocket, tcp_stream: TcpStream) 
     let _ = remaining_join_handle.await;
 }
 
+/// Reads from `tcp_in` and extracts UDP datagrams. Writes the datagrams to `udp_out`.
+/// Returns if the TCP socket is closed, or an IO error happens on either socket.
 async fn process_tcp2udp(
     mut tcp_in: TcpReadHalf,
     udp_out: Arc<UdpSocket>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = [0u8; MAX_DATAGRAM_SIZE];
-    // `buffer` has received but unprocessed data up until this index
+    // `buffer` has unprocessed data from the TCP socket up until this index.
     let mut unprocessed_i = 0;
     loop {
         let tcp_read_len = tcp_in
@@ -61,7 +70,9 @@ async fn process_tcp2udp(
         }
         unprocessed_i += tcp_read_len;
 
-        let processed_i = forward_datagrams_in_buffer(&udp_out, &buffer[..unprocessed_i]).await?;
+        let processed_i = forward_datagrams_in_buffer(&udp_out, &buffer[..unprocessed_i])
+            .await
+            .context("Failed writing to UDP")?;
 
         // If we have read data that was not forwarded, because it was not a complete datagram,
         // move it to the start of the buffer and start over
@@ -76,10 +87,7 @@ async fn process_tcp2udp(
 
 /// Forward all complete datagrams in `buffer` to `udp_out`.
 /// Returns the number of processed bytes.
-async fn forward_datagrams_in_buffer(
-    udp_out: &UdpSocket,
-    buffer: &[u8],
-) -> Result<usize, Box<dyn std::error::Error>> {
+async fn forward_datagrams_in_buffer(udp_out: &UdpSocket, buffer: &[u8]) -> io::Result<usize> {
     let mut header_start = 0;
     loop {
         let header_end = header_start + HEADER_LEN;
@@ -99,10 +107,7 @@ async fn forward_datagrams_in_buffer(
             None => break Ok(header_start),
         };
 
-        let udp_write_len = udp_out
-            .send(datagram_data)
-            .await
-            .context("Failed writing to UDP")?;
+        let udp_write_len = udp_out.send(datagram_data).await?;
         assert_eq!(
             udp_write_len, datagram_len,
             "Did not send entire UDP datagram"
@@ -113,10 +118,14 @@ async fn forward_datagrams_in_buffer(
     }
 }
 
+/// Reads datagrams from `udp_in` and writes them (with the 16 bit header containing the length)
+/// to `tcp_out` indefinitely, or until an IO error happens on either socket.
 async fn process_udp2tcp(
     udp_in: Arc<UdpSocket>,
     mut tcp_out: TcpWriteHalf,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Infallible, Box<dyn std::error::Error>> {
+    // A single datagram buffer on the stack with a size large enough to hold any datagram
+    // plus its length 16 bit header as
     let mut buffer = [0u8; MAX_DATAGRAM_SIZE];
     loop {
         let udp_read_len = udp_in
