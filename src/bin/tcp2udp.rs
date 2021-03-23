@@ -1,4 +1,4 @@
-use err_context::BoxedErrorExt as _;
+use err_context::ErrorExt as _;
 use std::num::NonZeroU8;
 use structopt::StructOpt;
 
@@ -27,6 +27,7 @@ fn main() {
         log::error!("Error: {}", error.display("\nCaused by: "));
         std::process::exit(1);
     }
+    unreachable!("tcp2udp never returns");
 }
 
 /// Creates a Tokio runtime for the process to use.

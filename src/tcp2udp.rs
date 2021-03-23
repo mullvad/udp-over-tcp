@@ -2,7 +2,9 @@
 //! to UDP.
 
 use err_context::{BoxedErrorExt as _, ResultExt as _};
+use std::convert::Infallible;
 use std::fmt;
+use std::io;
 use std::net::{IpAddr, SocketAddr};
 use structopt::StructOpt;
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
@@ -31,6 +33,15 @@ pub struct Options {
 pub enum Tcp2UdpError {
     /// No TCP listen addresses given in the `Options`.
     NoTcpListenAddrs,
+    CreateTcpSocket(io::Error),
+    /// Failed to apply TCP options to socket.
+    ApplyTcpOptions(crate::tcp_options::ApplyTcpOptionsError),
+    /// Failed to enable `SO_REUSEADDR` on TCP socket
+    SetReuseAddr(io::Error),
+    /// Failed to bind TCP socket to SocketAddr
+    BindTcpSocket(io::Error, SocketAddr),
+    /// Failed to start listening on TCP socket
+    ListenTcpSocket(io::Error, SocketAddr),
 }
 
 impl fmt::Display for Tcp2UdpError {
@@ -38,6 +49,15 @@ impl fmt::Display for Tcp2UdpError {
         use Tcp2UdpError::*;
         match self {
             NoTcpListenAddrs => "Invalid options, no TCP listen addresses".fmt(f),
+            CreateTcpSocket(_) => "Failed to create TCP socket".fmt(f),
+            ApplyTcpOptions(_) => "Failed to apply options to TCP socket".fmt(f),
+            SetReuseAddr(_) => "Failed to set SO_REUSEADDR on TCP socket".fmt(f),
+            BindTcpSocket(_, addr) => write!(f, "Failed to bind TCP socket to {}", addr),
+            ListenTcpSocket(_, addr) => write!(
+                f,
+                "Failed to start listening on TCP socket bound to {}",
+                addr
+            ),
         }
     }
 }
@@ -47,15 +67,22 @@ impl std::error::Error for Tcp2UdpError {
         use Tcp2UdpError::*;
         match self {
             NoTcpListenAddrs => None,
+            CreateTcpSocket(e) => Some(e),
+            ApplyTcpOptions(e) => Some(e),
+            SetReuseAddr(e) => Some(e),
+            BindTcpSocket(e, _) => Some(e),
+            ListenTcpSocket(e, _) => Some(e),
         }
     }
 }
 
-/// Runs the TCP to UDP forwarding until the TCP socket is closed or an
-/// error occurs.
-pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
+/// Sets up TCP listening sockets on all addresses in `Options::tcp_listen_addrs`.
+/// If binding a listening socket fails this returns an error. Otherwise the function
+/// will continue indefinitely to accept incoming connections and forward to UDP.
+/// Errors are just logged.
+pub async fn run(options: Options) -> Result<Infallible, Tcp2UdpError> {
     if options.tcp_listen_addrs.is_empty() {
-        return Err(Box::new(Tcp2UdpError::NoTcpListenAddrs));
+        return Err(Tcp2UdpError::NoTcpListenAddrs);
     }
 
     let mut join_handles = Vec::with_capacity(options.tcp_listen_addrs.len());
@@ -70,26 +97,28 @@ pub async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
         }));
     }
     futures::future::join_all(join_handles).await;
-    Ok(())
+    unreachable!("Listening TCP sockets never exit");
 }
 
 fn create_listening_socket(
     addr: SocketAddr,
     options: &crate::tcp_options::TcpOptions,
-) -> Result<TcpListener, Box<dyn std::error::Error>> {
+) -> Result<TcpListener, Tcp2UdpError> {
     let tcp_socket = match addr {
         SocketAddr::V4(..) => TcpSocket::new_v4(),
         SocketAddr::V6(..) => TcpSocket::new_v6(),
     }
-    .context("Failed to create new TCP socket")?;
-    crate::tcp_options::apply(&tcp_socket, options)?;
+    .map_err(Tcp2UdpError::CreateTcpSocket)?;
+    crate::tcp_options::apply(&tcp_socket, options).map_err(Tcp2UdpError::ApplyTcpOptions)?;
     tcp_socket
         .set_reuseaddr(true)
-        .context("Failed to set SO_REUSEADDR on TCP socket")?;
+        .map_err(Tcp2UdpError::SetReuseAddr)?;
     tcp_socket
         .bind(addr)
-        .with_context(|_| format!("Failed to bind TCP socket to {}", addr))?;
-    let tcp_listener = tcp_socket.listen(1024)?;
+        .map_err(|e| Tcp2UdpError::BindTcpSocket(e, addr))?;
+    let tcp_listener = tcp_socket
+        .listen(1024)
+        .map_err(|e| Tcp2UdpError::ListenTcpSocket(e, addr))?;
 
     Ok(tcp_listener)
 }
@@ -98,14 +127,12 @@ async fn process_tcp_listener(
     tcp_listener: TcpListener,
     udp_bind_ip: IpAddr,
     udp_forward_addr: SocketAddr,
-) {
+) -> ! {
     loop {
         match tcp_listener.accept().await {
             Ok((tcp_stream, tcp_peer_addr)) => {
                 log::debug!("Incoming connection from {}/TCP", tcp_peer_addr);
 
-                let udp_bind_ip = udp_bind_ip;
-                let udp_forward_addr = udp_forward_addr;
                 tokio::spawn(async move {
                     if let Err(error) =
                         process_socket(tcp_stream, tcp_peer_addr, udp_bind_ip, udp_forward_addr)
@@ -120,6 +147,9 @@ async fn process_tcp_listener(
     }
 }
 
+/// Sets up a UDP socket bound to `udp_bind_ip` and connected to `udp_peer_addr` and forwards
+/// traffic between that UDP socket and the given `tcp_stream` until the `tcp_stream` is closed.
+/// `tcp_peer_addr` should be the remote addr that `tcp_stream` is connected to.
 async fn process_socket(
     tcp_stream: TcpStream,
     tcp_peer_addr: SocketAddr,
