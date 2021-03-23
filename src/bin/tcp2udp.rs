@@ -1,4 +1,4 @@
-use err_context::BoxedErrorExt as _;
+use err_context::ErrorExt as _;
 use std::num::NonZeroU8;
 use structopt::StructOpt;
 
