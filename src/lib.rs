@@ -3,14 +3,18 @@
 //! Some programs/protocols only work over UDP. And some networks only allow TCP. This is where
 //! `udp-over-tcp` comes in handy. This library comes in two parts:
 //!
-//! * `udp2tcp` - Listens to UDP datagrams and forwards them over a TCP stream. The return stream
-//!   is translated back to datagrams and send out over UDP. This part can be easily used as both
-//!   a library and a binary. So can be run standalone, but can also easily be included in other
+//! * `udp2tcp` - Forwards incoming UDP datagrams over a TCP stream. The return stream
+//!   is translated back to datagrams and sent back out over UDP again.
+//!   This part can be easily used as both a library and a binary.
+//!   So it can be run standalone, but can also easily be included in other
 //!   Rust programs. The UDP socket is connected to the peer address of the first incoming
 //!   datagram. So one [`Udp2Tcp`] instance can handle traffic from a single peer only.
-//! * `tcp2udp` - Listens to TCP and translates any incoming data to datagrams and forward them
-//!   over UDP. Designed mostly to be a standalone executable to run on servers. But can be
+//! * `tcp2udp` - Accepts connections over TCP and translates + forwards the incoming stream
+//!   as UDP datagrams to the destination specified during setup / on the command line.
+//!   Designed mostly to be a standalone executable to run on servers. But can be
 //!   consumed as a Rust library as well.
+//!   `tcp2udp` continues to accept new incoming TCP connections, and creates a new UDP socket
+//!   for each. So a single `tcp2udp` server can be used to service many `udp2tcp` clients.
 //!
 //! # Protocol
 //!
