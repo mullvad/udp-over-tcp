@@ -104,8 +104,6 @@ async fn process_tcp_listener(
             Ok((tcp_stream, tcp_peer_addr)) => {
                 log::debug!("Incoming connection from {}/TCP", tcp_peer_addr);
 
-                let udp_bind_ip = udp_bind_ip;
-                let udp_forward_addr = udp_forward_addr;
                 tokio::spawn(async move {
                     if let Err(error) =
                         process_socket(tcp_stream, tcp_peer_addr, udp_bind_ip, udp_forward_addr)
