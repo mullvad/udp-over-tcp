@@ -81,10 +81,9 @@ impl Udp2Tcp {
     pub async fn new(
         udp_listen_addr: SocketAddr,
         tcp_forward_addr: SocketAddr,
-        tcp_options: Option<crate::TcpOptions>,
+        tcp_options: crate::TcpOptions,
     ) -> Result<Self, ConnectError> {
-        let tcp_stream =
-            Self::connect_tcp_socket(tcp_forward_addr, tcp_options.unwrap_or_default()).await?;
+        let tcp_stream = Self::connect_tcp_socket(tcp_forward_addr, tcp_options).await?;
         log::info!("Connected to {}/TCP", tcp_forward_addr);
 
         let udp_socket = UdpSocket::bind(udp_listen_addr)
