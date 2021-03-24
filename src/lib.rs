@@ -85,3 +85,15 @@ mod forward_traffic;
 mod tcp_options;
 
 pub use tcp_options::{ApplyTcpOptionsError, TcpOptions};
+
+/// Helper trait for `Result<Infallible, E>` types. Allows getting the `E` value
+/// in a way that is guaranteed to not panic.
+pub trait NeverOkResult<E> {
+    fn into_err(self) -> E;
+}
+
+impl<E> NeverOkResult<E> for Result<std::convert::Infallible, E> {
+    fn into_err(self) -> E {
+        self.expect_err("Result<Infallible, _> can't be Ok variant")
+    }
+}

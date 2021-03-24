@@ -2,7 +2,7 @@ use err_context::ErrorExt as _;
 use std::num::NonZeroU8;
 use structopt::StructOpt;
 
-use udp_over_tcp::tcp2udp;
+use udp_over_tcp::{tcp2udp, NeverOkResult};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "tcp2udp", about = "Listen for incoming TCP and forward to UDP")]
@@ -22,12 +22,11 @@ fn main() {
 
     let runtime = create_runtime(options.threads);
 
-    let result = runtime.block_on(tcp2udp::run(options.tcp2udp_options));
-    if let Err(error) = result {
-        log::error!("Error: {}", error.display("\nCaused by: "));
-        std::process::exit(1);
-    }
-    unreachable!("tcp2udp never returns");
+    let error = runtime
+        .block_on(tcp2udp::run(options.tcp2udp_options))
+        .into_err();
+    log::error!("Error: {}", error.display("\nCaused by: "));
+    std::process::exit(1);
 }
 
 /// Creates a Tokio runtime for the process to use.
