@@ -10,7 +10,35 @@ env:
   RUSTFLAGS: --deny warnings
 
 jobs:
-  meta:
+  formatting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: rustfmt
+          default: true
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+  linting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: clippy
+          default: true
+      - name: Lint (clippy)
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -19,28 +47,15 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
-          components: rustfmt, clippy
           default: true
-
       - name: Install cargo-audit
         uses: actions-rs/install@v0.1.2
         with:
           crate: cargo-audit
           version: latest
           use-tool-cache: true
-
-      - name: Check formatting
-        run: cargo fmt -- --check
-
       - name: Audit
-        if: always()
         run: cargo audit --deny warnings
-
-      - name: Lint (clippy)
-        if: always()
-        uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
 
   test-linux:
