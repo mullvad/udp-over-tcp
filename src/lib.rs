@@ -76,6 +76,8 @@
 //! ```
 //!
 
+#![deny(clippy::all)]
+
 pub mod tcp2udp;
 pub mod udp2tcp;
 
