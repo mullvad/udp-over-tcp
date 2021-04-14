@@ -1,6 +1,7 @@
 //! Primitives for listening on UDP and forwarding the data in incoming datagrams
 //! to a TCP stream.
 
+use crate::logging::Redact;
 use std::fmt;
 use std::io;
 use std::net::SocketAddr;
@@ -136,7 +137,7 @@ impl Udp2Tcp {
             .peek_from(&mut [0u8; crate::forward_traffic::MAX_DATAGRAM_SIZE])
             .await
             .map_err(ForwardError::ReadUdp)?;
-        log::info!("Incoming connection from {}/UDP", udp_peer_addr);
+        log::info!("Incoming connection from {}/UDP", Redact(udp_peer_addr));
 
         // Connect the UDP socket to whoever sent the first datagram. This is where
         // all the returned traffic will be sent to.
@@ -148,7 +149,7 @@ impl Udp2Tcp {
         crate::forward_traffic::process_udp_over_tcp(self.udp_socket, self.tcp_stream).await;
         log::debug!(
             "Closing forwarding for {}/UDP <-> {}/TCP",
-            udp_peer_addr,
+            Redact(udp_peer_addr),
             self.tcp_forward_addr,
         );
 
