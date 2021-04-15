@@ -35,6 +35,9 @@
 //! `RUST_LOG` can be used to set logging level. See documentation for [`env_logger`] for
 //! information.
 //!
+//! `REDACT_LOGS=1` can be set to redact the IPs of the peers using the service from the logs.
+//! Allows having logging turned on but without storing potentially user sensitive data to disk.
+//!
 //! [`env_logger`]: https://crates.io/crates/env_logger
 //!
 //! # udp2tcp example
@@ -84,6 +87,7 @@ pub mod udp2tcp;
 pub use udp2tcp::Udp2Tcp;
 
 mod forward_traffic;
+mod logging;
 mod tcp_options;
 
 pub use tcp_options::{ApplyTcpOptionsError, TcpOptions};

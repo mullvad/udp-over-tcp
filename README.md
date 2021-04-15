@@ -5,8 +5,8 @@ A library (and binaries) for tunneling UDP datagrams over a TCP stream.
 Some programs/protocols only work over UDP. And some networks only allow TCP. This is where
 `udp-over-tcp` comes in handy. This library comes in two parts:
 
-* `udp2tcp` - Forwards incoming UDP datagrams and over a TCP stream. The return stream
-  is translated back to datagrams and send out over UDP again.
+* `udp2tcp` - Forwards incoming UDP datagrams over a TCP stream. The return stream
+  is translated back to datagrams and sent back out over UDP again.
   This part can be easily used as both a library and a binary.
   So it can be run standalone, but can also easily be included in other
   Rust programs. The UDP socket is connected to the peer address of the first incoming
@@ -36,6 +36,9 @@ user@server $ RUST_LOG=debug tcp2udp \
 
 `RUST_LOG` can be used to set logging level. See documentation for [`env_logger`] for
 information.
+
+`REDACT_LOGS=1` can be set to redact the IPs of the peers using the service from the logs.
+Allows having logging turned on but without storing potentially user sensitive data to disk.
 
 [`env_logger`]: https://crates.io/crates/env_logger
 

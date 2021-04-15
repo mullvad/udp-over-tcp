@@ -12,7 +12,9 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
-Environment=RUST_LOG=info
+# Uncomment this to have the logs not contain the IPs of the peers using this service
+#Environment=REDACT_LOGS=1
+Environment=RUST_LOG=debug
 ExecStart=/usr/local/bin/tcp2udp --threads=2 --tcp-listen 0.0.0.0:443 --udp-bind=127.0.0.1 --udp-forward 127.0.0.1:51820
 Restart=always
 RestartSec=2

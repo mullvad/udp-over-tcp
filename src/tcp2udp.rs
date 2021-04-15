@@ -1,6 +1,7 @@
 //! Primitives for listening on TCP and forwarding the data in incoming connections
 //! to UDP.
 
+use crate::logging::Redact;
 use err_context::{BoxedErrorExt as _, ResultExt as _};
 use std::convert::Infallible;
 use std::fmt;
@@ -131,7 +132,7 @@ async fn process_tcp_listener(
     loop {
         match tcp_listener.accept().await {
             Ok((tcp_stream, tcp_peer_addr)) => {
-                log::debug!("Incoming connection from {}/TCP", tcp_peer_addr);
+                log::debug!("Incoming connection from {}/TCP", Redact(tcp_peer_addr));
 
                 tokio::spawn(async move {
                     if let Err(error) =
@@ -180,7 +181,7 @@ async fn process_socket(
     crate::forward_traffic::process_udp_over_tcp(udp_socket, tcp_stream).await;
     log::debug!(
         "Closing forwarding for {}/TCP <-> {}/UDP",
-        tcp_peer_addr,
+        Redact(tcp_peer_addr),
         udp_peer_addr
     );
 
