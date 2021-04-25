@@ -22,3 +22,11 @@ lazy_static = "1.4.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nix = "0.20"
+
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "my_benchmark"
+harness = false
