@@ -79,6 +79,7 @@
 //! ```
 //!
 
+#![forbid(unsafe_code)]
 #![deny(clippy::all)]
 
 pub mod tcp2udp;
