@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use err_context::BoxedErrorExt as _;
 use std::net::SocketAddr;
 use structopt::StructOpt;

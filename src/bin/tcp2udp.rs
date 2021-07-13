@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use err_context::ErrorExt as _;
 use std::num::NonZeroU8;
 use structopt::StructOpt;
