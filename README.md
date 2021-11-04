@@ -60,7 +60,7 @@ let tcp_forward_addr = "1.2.3.4:9000".parse().unwrap();
 let udp2tcp = udp2tcp::Udp2Tcp::new(
     udp_listen_addr,
     tcp_forward_addr,
-    None,
+    TcpOptions::default(),
 )
 .await?;
 
