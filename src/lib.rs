@@ -48,8 +48,7 @@
 //! It will then connect the UDP socket to the socket addr of the first incoming datagram
 //! and start forwarding all traffic to (and from) the TCP socket.
 //!
-//! ```ignore
-//! # use udp_over_tcp::udp2tcp;
+//! ```no_run
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! # fn spin_up_some_udp_thing<T>(t: T) {}
@@ -59,10 +58,10 @@
 //!
 //! // Create a UDP -> TCP forwarder. This will connect the TCP socket
 //! // to `tcp_forward_addr`
-//! let udp2tcp = udp2tcp::Udp2Tcp::new(
+//! let udp2tcp = udp_over_tcp::Udp2Tcp::new(
 //!     udp_listen_addr,
 //!     tcp_forward_addr,
-//!     None,
+//!     udp_over_tcp::TcpOptions::default(),
 //! )
 //! .await?;
 //!
