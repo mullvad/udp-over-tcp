@@ -57,7 +57,7 @@ async fn process_tcp2udp(
     mut tcp_in: TcpReadHalf,
     udp_out: Arc<UdpSocket>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut buffer = [0u8; MAX_DATAGRAM_SIZE];
+    let mut buffer = datagram_buffer();
     // `buffer` has unprocessed data from the TCP socket up until this index.
     let mut unprocessed_i = 0;
     loop {
@@ -124,9 +124,8 @@ async fn process_udp2tcp(
     udp_in: Arc<UdpSocket>,
     mut tcp_out: TcpWriteHalf,
 ) -> Result<Infallible, Box<dyn std::error::Error>> {
-    // A single datagram buffer on the stack with a size large enough to hold any datagram
-    // plus its length 16 bit header as
-    let mut buffer = [0u8; MAX_DATAGRAM_SIZE];
+    // A buffer large enough to hold any possible UDP datagram plus its 16 bit length header.
+    let mut buffer = datagram_buffer();
     loop {
         let udp_read_len = udp_in
             .recv(&mut buffer[HEADER_LEN..])
@@ -145,4 +144,14 @@ async fn process_udp2tcp(
 
         log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
     }
+}
+
+/// Creates and returns a buffer on the heap with enough space to contain any possible
+/// UDP datagram.
+///
+/// This is put on the heap and in a separate function to avoid the 64k buffer from ending
+/// up on the stack and blowing up the size of the futures using it.
+#[inline(never)]
+pub fn datagram_buffer() -> Box<[u8; MAX_DATAGRAM_SIZE]> {
+    Box::new([0u8; MAX_DATAGRAM_SIZE])
 }
