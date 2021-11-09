@@ -132,9 +132,10 @@ impl Udp2Tcp {
     /// Runs the forwarding until the TCP socket is closed, or an error occur.
     pub async fn run(self) -> Result<(), ForwardError> {
         // Wait for the first datagram, to get the UDP peer_addr to connect to.
+        let mut tmp_buffer = crate::forward_traffic::datagram_buffer();
         let (_udp_read_len, udp_peer_addr) = self
             .udp_socket
-            .peek_from(&mut [0u8; crate::forward_traffic::MAX_DATAGRAM_SIZE])
+            .peek_from(tmp_buffer.as_mut())
             .await
             .map_err(ForwardError::ReadUdp)?;
         log::info!("Incoming connection from {}/UDP", Redact(udp_peer_addr));
