@@ -26,7 +26,7 @@ fn main() {
 
     let error = runtime
         .block_on(tcp2udp::run(options.tcp2udp_options))
-        .into_err();
+        .into_error();
     log::error!("Error: {}", error.display("\nCaused by: "));
     std::process::exit(1);
 }
