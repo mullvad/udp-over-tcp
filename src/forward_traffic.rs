@@ -33,7 +33,7 @@ pub async fn process_udp_over_tcp(udp_socket: UdpSocket, tcp_stream: TcpStream) 
         }
     });
     let (udp2tcp_future, udp2tcp_abort) = abortable(async move {
-        let error = process_udp2tcp(udp_in, tcp_out).await.into_err();
+        let error = process_udp2tcp(udp_in, tcp_out).await.into_error();
         log::error!("Error: {}", error.display("\nCaused by: "));
     });
     let tcp2udp_join = tokio::spawn(tcp2udp_future);
