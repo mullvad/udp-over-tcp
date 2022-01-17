@@ -1,7 +1,7 @@
 use crate::NeverOkResult;
 use err_context::BoxedErrorExt as _;
 use err_context::ResultExt as _;
-use futures::future::{abortable, select, Either};
+use futures::future::{select, Either};
 use std::convert::{Infallible, TryFrom};
 use std::io;
 use std::mem;
@@ -27,25 +27,22 @@ pub async fn process_udp_over_tcp(udp_socket: UdpSocket, tcp_stream: TcpStream) 
     let udp_out = udp_in.clone();
     let (tcp_in, tcp_out) = tcp_stream.into_split();
 
-    let (tcp2udp_future, tcp2udp_abort) = abortable(async move {
+    let tcp2udp = tokio::spawn(async move {
         if let Err(error) = process_tcp2udp(tcp_in, udp_out).await {
             log::error!("Error: {}", error.display("\nCaused by: "));
         }
     });
-    let (udp2tcp_future, udp2tcp_abort) = abortable(async move {
+    let udp2tcp = tokio::spawn(async move {
         let error = process_udp2tcp(udp_in, tcp_out).await.into_error();
         log::error!("Error: {}", error.display("\nCaused by: "));
     });
-    let tcp2udp_join = tokio::spawn(tcp2udp_future);
-    let udp2tcp_join = tokio::spawn(udp2tcp_future);
 
     // Wait until the UDP->TCP or TCP->UDP future terminates, then abort the other.
-    let remaining_join_handle = match select(tcp2udp_join, udp2tcp_join).await {
-        Either::Left((_, udp2tcp_join)) => udp2tcp_join,
-        Either::Right((_, tcp2udp_join)) => tcp2udp_join,
+    let remaining_join_handle = match select(tcp2udp, udp2tcp).await {
+        Either::Left((_, udp2tcp)) => udp2tcp,
+        Either::Right((_, tcp2udp)) => tcp2udp,
     };
-    tcp2udp_abort.abort();
-    udp2tcp_abort.abort();
+    remaining_join_handle.abort();
     // Wait for the remaining future to finish. So everything this function spawned
     // is cleaned up before we return.
     let _ = remaining_join_handle.await;
