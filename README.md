@@ -57,10 +57,10 @@ let tcp_forward_addr = "1.2.3.4:9000".parse().unwrap();
 
 // Create a UDP -> TCP forwarder. This will connect the TCP socket
 // to `tcp_forward_addr`
-let udp2tcp = udp2tcp::Udp2Tcp::new(
+let udp2tcp = udp_over_tcp::Udp2Tcp::new(
     udp_listen_addr,
     tcp_forward_addr,
-    TcpOptions::default(),
+    udp_over_tcp::TcpOptions::default(),
 )
 .await?;
 
