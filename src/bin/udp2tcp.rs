@@ -23,7 +23,9 @@ pub struct Options {
 
 #[tokio::main]
 async fn main() {
+    #[cfg(feature = "env_logger")]
     env_logger::init();
+
     let options = Options::from_args();
     if let Err(error) = run(options).await {
         log::error!("Error: {}", error.display("\nCaused by: "));
