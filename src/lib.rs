@@ -33,7 +33,7 @@
 //! ```
 //!
 //! `RUST_LOG` can be used to set logging level. See documentation for [`env_logger`] for
-//! information.
+//! information. The crate must be built with the `env_logger` feature for this to be active.
 //!
 //! `REDACT_LOGS=1` can be set to redact the IPs of the peers using the service from the logs.
 //! Allows having logging turned on but without storing potentially user sensitive data to disk.

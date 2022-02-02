@@ -35,7 +35,7 @@ user@server $ RUST_LOG=debug tcp2udp \
 ```
 
 `RUST_LOG` can be used to set logging level. See documentation for [`env_logger`] for
-information.
+information. The crate must be built with the `env_logger` feature for this to be active.
 
 `REDACT_LOGS=1` can be set to redact the IPs of the peers using the service from the logs.
 Allows having logging turned on but without storing potentially user sensitive data to disk.
@@ -57,10 +57,10 @@ let tcp_forward_addr = "1.2.3.4:9000".parse().unwrap();
 
 // Create a UDP -> TCP forwarder. This will connect the TCP socket
 // to `tcp_forward_addr`
-let udp2tcp = udp2tcp::Udp2Tcp::new(
+let udp2tcp = udp_over_tcp::Udp2Tcp::new(
     udp_listen_addr,
     tcp_forward_addr,
-    TcpOptions::default(),
+    udp_over_tcp::TcpOptions::default(),
 )
 .await?;
 

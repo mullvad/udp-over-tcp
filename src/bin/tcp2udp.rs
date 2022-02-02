@@ -19,7 +19,9 @@ pub struct Options {
 }
 
 fn main() {
+    #[cfg(feature = "env_logger")]
     env_logger::init();
+
     let options = Options::from_args();
 
     let runtime = create_runtime(options.threads);
