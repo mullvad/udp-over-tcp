@@ -3,7 +3,7 @@ name = "udp-over-tcp"
 version = "0.1.0"
 authors = ["Mullvad VPN"]
 description = "Tunnel UDP traffic inside a TCP stream. Each datagram is prefixed with a 16 bit unsigned integer containing the length"
-edition = "2018"
+edition = "2021"
 publish = false
 
 [profile.release]
