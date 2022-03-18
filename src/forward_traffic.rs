@@ -1,8 +1,10 @@
 use crate::NeverOkResult;
 use err_context::BoxedErrorExt as _;
 use err_context::ResultExt as _;
+use futures::future::abortable;
 use futures::future::select;
-use futures::pin_mut;
+use futures::future::AbortHandle;
+use futures::future::Either;
 use std::convert::{Infallible, TryFrom};
 use std::io;
 use std::mem;
@@ -28,21 +30,45 @@ pub async fn process_udp_over_tcp(udp_socket: UdpSocket, tcp_stream: TcpStream) 
     let udp_out = udp_in.clone();
     let (tcp_in, tcp_out) = tcp_stream.into_split();
 
-    let tcp2udp = async move {
+    let (tcp2udp, tcp2udp_abort) = abortable(tokio::spawn(async move {
         if let Err(error) = process_tcp2udp(tcp_in, udp_out).await {
             log::error!("Error: {}", error.display("\nCaused by: "));
         }
-    };
-    let udp2tcp = async move {
+    }));
+    let (udp2tcp, udp2tcp_abort) = abortable(tokio::spawn(async move {
         let error = process_udp2tcp(udp_in, tcp_out).await.into_error();
         log::error!("Error: {}", error.display("\nCaused by: "));
-    };
+    }));
 
-    pin_mut!(tcp2udp);
-    pin_mut!(udp2tcp);
+    AbortWhenDropped::new(tcp2udp_abort.clone());
+    AbortWhenDropped::new(udp2tcp_abort.clone());
 
     // Wait until the UDP->TCP or TCP->UDP future terminates.
-    select(tcp2udp, udp2tcp).await;
+    let remaining_join_handle = match select(tcp2udp, udp2tcp).await {
+        Either::Left((_, udp2tcp)) => udp2tcp,
+        Either::Right((_, tcp2udp)) => tcp2udp,
+    };
+    tcp2udp_abort.abort();
+    udp2tcp_abort.abort();
+    let _ = remaining_join_handle.await;
+}
+
+struct AbortWhenDropped {
+    handle: AbortHandle,
+}
+
+impl AbortWhenDropped {
+    fn new(abort_handle: AbortHandle) -> Self {
+        Self {
+            handle: abort_handle,
+        }
+    }
+}
+
+impl Drop for AbortWhenDropped {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
 }
 
 /// Reads from `tcp_in` and extracts UDP datagrams. Writes the datagrams to `udp_out`.
