@@ -1,7 +1,8 @@
 use crate::NeverOkResult;
 use err_context::BoxedErrorExt as _;
 use err_context::ResultExt as _;
-use futures::future::{select, Either};
+use futures::future::select;
+use futures::pin_mut;
 use std::convert::{Infallible, TryFrom};
 use std::io;
 use std::mem;
@@ -27,25 +28,21 @@ pub async fn process_udp_over_tcp(udp_socket: UdpSocket, tcp_stream: TcpStream) 
     let udp_out = udp_in.clone();
     let (tcp_in, tcp_out) = tcp_stream.into_split();
 
-    let tcp2udp = tokio::spawn(async move {
+    let tcp2udp = async move {
         if let Err(error) = process_tcp2udp(tcp_in, udp_out).await {
             log::error!("Error: {}", error.display("\nCaused by: "));
         }
-    });
-    let udp2tcp = tokio::spawn(async move {
+    };
+    let udp2tcp = async move {
         let error = process_udp2tcp(udp_in, tcp_out).await.into_error();
         log::error!("Error: {}", error.display("\nCaused by: "));
-    });
-
-    // Wait until the UDP->TCP or TCP->UDP future terminates, then abort the other.
-    let remaining_join_handle = match select(tcp2udp, udp2tcp).await {
-        Either::Left((_, udp2tcp)) => udp2tcp,
-        Either::Right((_, tcp2udp)) => tcp2udp,
     };
-    remaining_join_handle.abort();
-    // Wait for the remaining future to finish. So everything this function spawned
-    // is cleaned up before we return.
-    let _ = remaining_join_handle.await;
+
+    pin_mut!(tcp2udp);
+    pin_mut!(udp2tcp);
+
+    // Wait until the UDP->TCP or TCP->UDP future terminates.
+    select(tcp2udp, udp2tcp).await;
 }
 
 /// Reads from `tcp_in` and extracts UDP datagrams. Writes the datagrams to `udp_out`.
