@@ -7,6 +7,7 @@ use std::convert::Infallible;
 use std::fmt;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
+use std::time::Duration;
 use structopt::StructOpt;
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 
@@ -93,8 +94,15 @@ pub async fn run(options: Options) -> Result<Infallible, Tcp2UdpError> {
 
         let udp_bind_ip = options.udp_bind_ip;
         let udp_forward_addr = options.udp_forward_addr;
+        let tcp_recv_timeout = options.tcp_options.recv_timeout;
         join_handles.push(tokio::spawn(async move {
-            process_tcp_listener(tcp_listener, udp_bind_ip, udp_forward_addr).await;
+            process_tcp_listener(
+                tcp_listener,
+                udp_bind_ip,
+                udp_forward_addr,
+                tcp_recv_timeout,
+            )
+            .await;
         }));
     }
     futures::future::join_all(join_handles).await;
@@ -128,6 +136,7 @@ async fn process_tcp_listener(
     tcp_listener: TcpListener,
     udp_bind_ip: IpAddr,
     udp_forward_addr: SocketAddr,
+    tcp_recv_timeout: Option<Duration>,
 ) -> ! {
     loop {
         match tcp_listener.accept().await {
@@ -135,9 +144,14 @@ async fn process_tcp_listener(
                 log::debug!("Incoming connection from {}/TCP", Redact(tcp_peer_addr));
 
                 tokio::spawn(async move {
-                    if let Err(error) =
-                        process_socket(tcp_stream, tcp_peer_addr, udp_bind_ip, udp_forward_addr)
-                            .await
+                    if let Err(error) = process_socket(
+                        tcp_stream,
+                        tcp_peer_addr,
+                        udp_bind_ip,
+                        udp_forward_addr,
+                        tcp_recv_timeout,
+                    )
+                    .await
                     {
                         log::error!("Error: {}", error.display("\nCaused by: "));
                     }
@@ -156,6 +170,7 @@ async fn process_socket(
     tcp_peer_addr: SocketAddr,
     udp_bind_ip: IpAddr,
     udp_peer_addr: SocketAddr,
+    tcp_recv_timeout: Option<Duration>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let udp_bind_addr = SocketAddr::new(udp_bind_ip, 0);
 
@@ -178,7 +193,7 @@ async fn process_socket(
         udp_peer_addr
     );
 
-    crate::forward_traffic::process_udp_over_tcp(udp_socket, tcp_stream).await;
+    crate::forward_traffic::process_udp_over_tcp(udp_socket, tcp_stream, tcp_recv_timeout).await;
     log::debug!(
         "Closing forwarding for {}/TCP <-> {}/UDP",
         Redact(tcp_peer_addr),

@@ -5,6 +5,7 @@ use crate::logging::Redact;
 use std::fmt;
 use std::io;
 use std::net::SocketAddr;
+use std::time::Duration;
 use tokio::net::{TcpSocket, TcpStream, UdpSocket};
 
 #[derive(Debug)]
@@ -74,6 +75,7 @@ pub struct Udp2Tcp {
     tcp_stream: TcpStream,
     udp_socket: UdpSocket,
     tcp_forward_addr: SocketAddr,
+    tcp_recv_timeout: Option<Duration>,
 }
 
 impl Udp2Tcp {
@@ -84,7 +86,7 @@ impl Udp2Tcp {
         tcp_forward_addr: SocketAddr,
         tcp_options: crate::TcpOptions,
     ) -> Result<Self, ConnectError> {
-        let tcp_stream = Self::connect_tcp_socket(tcp_forward_addr, tcp_options).await?;
+        let tcp_stream = Self::connect_tcp_socket(tcp_forward_addr, &tcp_options).await?;
         log::info!("Connected to {}/TCP", tcp_forward_addr);
 
         let udp_socket = UdpSocket::bind(udp_listen_addr)
@@ -99,12 +101,13 @@ impl Udp2Tcp {
             tcp_stream,
             udp_socket,
             tcp_forward_addr,
+            tcp_recv_timeout: tcp_options.recv_timeout,
         })
     }
 
     async fn connect_tcp_socket(
         addr: SocketAddr,
-        options: crate::TcpOptions,
+        options: &crate::TcpOptions,
     ) -> Result<TcpStream, ConnectError> {
         let tcp_socket = match addr {
             SocketAddr::V4(..) => TcpSocket::new_v4(),
@@ -112,7 +115,7 @@ impl Udp2Tcp {
         }
         .map_err(ConnectError::CreateTcpSocket)?;
 
-        crate::tcp_options::apply(&tcp_socket, &options).map_err(ConnectError::ApplyTcpOptions)?;
+        crate::tcp_options::apply(&tcp_socket, options).map_err(ConnectError::ApplyTcpOptions)?;
 
         let tcp_stream = tcp_socket
             .connect(addr)
@@ -147,7 +150,12 @@ impl Udp2Tcp {
             .await
             .map_err(ForwardError::ConnectUdp)?;
 
-        crate::forward_traffic::process_udp_over_tcp(self.udp_socket, self.tcp_stream).await;
+        crate::forward_traffic::process_udp_over_tcp(
+            self.udp_socket,
+            self.tcp_stream,
+            self.tcp_recv_timeout,
+        )
+        .await;
         log::debug!(
             "Closing forwarding for {}/UDP <-> {}/TCP",
             Redact(udp_peer_addr),
