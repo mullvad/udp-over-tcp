@@ -2,8 +2,11 @@
 use nix::sys::socket::{getsockopt, setsockopt, sockopt};
 use std::fmt;
 use std::io;
+use std::num::ParseIntError;
 #[cfg(target_os = "linux")]
 use std::os::unix::io::AsRawFd;
+use std::str::FromStr;
+use std::time::Duration;
 use tokio::net::TcpSocket;
 
 /// Options to apply to the TCP socket involved in the tunneling.
@@ -18,6 +21,10 @@ pub struct TcpOptions {
     /// Changes the size of the operating system's send buffer associated with the socket.
     #[structopt(long = "send-buffer")]
     pub send_buffer_size: Option<u32>,
+
+    /// An application timeout on receiving data from the TCP socket.
+    #[structopt(long = "tcp-recv-timeout", parse(try_from_str = duration_secs_from_str))]
+    pub recv_timeout: Option<Duration>,
 
     /// If given, sets the SO_MARK option on the TCP socket.
     /// This exists only on Linux.
@@ -62,6 +69,10 @@ impl std::error::Error for ApplyTcpOptionsError {
             Mark(e) => Some(e),
         }
     }
+}
+
+fn duration_secs_from_str(str_duration: &str) -> Result<Duration, ParseIntError> {
+    u64::from_str(str_duration).map(Duration::from_secs)
 }
 
 /// Applies the given options to the given TCP socket.
