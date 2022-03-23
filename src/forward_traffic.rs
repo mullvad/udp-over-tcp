@@ -16,7 +16,7 @@ use tokio::time::timeout;
 
 /// A UDP datagram header has a 16 bit field containing an unsigned integer
 /// describing the length of the datagram (including the header itself).
-/// The max value is 2^16 = 65534 bytes. But since that includes the
+/// The max value is 2^16 = 65536 bytes. But since that includes the
 /// UDP header, this constant is 8 bytes more than any UDP socket
 /// read operation would ever return. We are going to use that extra space
 /// to store our 2 byte udp-over-tcp header.
