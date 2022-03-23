@@ -1,6 +1,6 @@
 [package]
 name = "udp-over-tcp"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Mullvad VPN"]
 license = "MIT OR Apache-2.0"
 description = "Tunnel UDP traffic inside a TCP stream. Each datagram is prefixed with a 16 bit unsigned integer containing the length"
