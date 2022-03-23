@@ -4,16 +4,19 @@ use err_context::ResultExt as _;
 use futures::future::select;
 use futures::pin_mut;
 use std::convert::{Infallible, TryFrom};
+use std::future::Future;
 use std::io;
 use std::mem;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf as TcpReadHalf, OwnedWriteHalf as TcpWriteHalf};
 use tokio::net::{TcpStream, UdpSocket};
+use tokio::time::timeout;
 
 /// A UDP datagram header has a 16 bit field containing an unsigned integer
 /// describing the length of the datagram (including the header itself).
-/// The max value is 2^16 = 65534 bytes. But since that includes the
+/// The max value is 2^16 = 65536 bytes. But since that includes the
 /// UDP header, this constant is 8 bytes more than any UDP socket
 /// read operation would ever return. We are going to use that extra space
 /// to store our 2 byte udp-over-tcp header.
@@ -23,13 +26,17 @@ const HEADER_LEN: usize = mem::size_of::<u16>();
 /// Forward traffic between the given UDP and TCP sockets in both directions.
 /// This async function runs until one of the sockets are closed or there is an error.
 /// Both sockets are closed before returning.
-pub async fn process_udp_over_tcp(udp_socket: UdpSocket, tcp_stream: TcpStream) {
+pub async fn process_udp_over_tcp(
+    udp_socket: UdpSocket,
+    tcp_stream: TcpStream,
+    tcp_recv_timeout: Option<Duration>,
+) {
     let udp_in = Arc::new(udp_socket);
     let udp_out = udp_in.clone();
     let (tcp_in, tcp_out) = tcp_stream.into_split();
 
     let tcp2udp = async move {
-        if let Err(error) = process_tcp2udp(tcp_in, udp_out).await {
+        if let Err(error) = process_tcp2udp(tcp_in, udp_out, tcp_recv_timeout).await {
             log::error!("Error: {}", error.display("\nCaused by: "));
         }
     };
@@ -50,15 +57,17 @@ pub async fn process_udp_over_tcp(udp_socket: UdpSocket, tcp_stream: TcpStream) 
 async fn process_tcp2udp(
     mut tcp_in: TcpReadHalf,
     udp_out: Arc<UdpSocket>,
+    tcp_recv_timeout: Option<Duration>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = datagram_buffer();
     // `buffer` has unprocessed data from the TCP socket up until this index.
     let mut unprocessed_i = 0;
     loop {
-        let tcp_read_len = tcp_in
-            .read(&mut buffer[unprocessed_i..])
-            .await
-            .context("Failed reading from TCP")?;
+        let tcp_read_len =
+            maybe_timeout(tcp_recv_timeout, tcp_in.read(&mut buffer[unprocessed_i..]))
+                .await
+                .context("Timeout while reading from TCP")?
+                .context("Failed reading from TCP")?;
         if tcp_read_len == 0 {
             break;
         }
@@ -77,6 +86,16 @@ async fn process_tcp2udp(
     }
     log::debug!("TCP socket closed");
     Ok(())
+}
+
+async fn maybe_timeout<F: Future>(
+    duration: Option<Duration>,
+    future: F,
+) -> Result<F::Output, tokio::time::error::Elapsed> {
+    match duration {
+        Some(duration) => timeout(duration, future).await,
+        None => Ok(future.await),
+    }
 }
 
 /// Forward all complete datagrams in `buffer` to `udp_out`.

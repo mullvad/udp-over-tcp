@@ -51,6 +51,7 @@ fn create_runtime(threads: Option<NonZeroU8>) -> tokio::runtime::Runtime {
         }
         None => tokio::runtime::Builder::new_multi_thread(),
     };
+    runtime.enable_time();
     runtime.enable_io();
 
     runtime.build().expect("Failed to build async runtime")
