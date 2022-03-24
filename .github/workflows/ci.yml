@@ -80,12 +80,15 @@ jobs:
           toolchain: ${{ matrix.rust }}
           default: true
 
-      - name: Build
-        uses: actions-rs/cargo@v1
+      - name: Install cargo-all-features
+        uses: actions-rs/install@v0.1
         with:
-          command: build
+          crate: cargo-all-features
+          version: latest
+          use-tool-cache: true
+
+      - name: Build
+        run: cargo build-all-features
 
       - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
+        run: cargo test-all-features
