@@ -38,25 +38,13 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  audit:
+  security_audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/audit-check@v1
         with:
-          profile: minimal
-          toolchain: stable
-          default: true
-      - name: Install cargo-audit
-        uses: actions-rs/install@v0.1.2
-        with:
-          crate: cargo-audit
-          version: latest
-          use-tool-cache: true
-      - name: Audit
-        run: cargo audit --deny warnings
-
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   build-and-test:
     strategy:
