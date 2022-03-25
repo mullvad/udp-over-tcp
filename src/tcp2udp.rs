@@ -8,25 +8,28 @@ use std::fmt;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
-use structopt::StructOpt;
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug)]
+#[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
 pub struct Options {
     /// The IP and TCP port(s) to listen to for incoming traffic from udp2tcp.
     /// Supports binding multiple TCP sockets.
-    #[structopt(long = "tcp-listen", required(true))]
+    #[cfg_attr(feature = "structopt", structopt(long = "tcp-listen", required(true)))]
     pub tcp_listen_addrs: Vec<SocketAddr>,
 
-    #[structopt(long = "udp-forward")]
+    #[cfg_attr(feature = "structopt", structopt(long = "udp-forward"))]
     /// The IP and UDP port to forward all traffic to.
     pub udp_forward_addr: SocketAddr,
 
     /// Which local IP to bind the UDP socket to.
-    #[structopt(long = "udp-bind", default_value = "0.0.0.0")]
+    #[cfg_attr(
+        feature = "structopt",
+        structopt(long = "udp-bind", default_value = "0.0.0.0")
+    )]
     pub udp_bind_ip: IpAddr,
 
-    #[structopt(flatten)]
+    #[cfg_attr(feature = "structopt", structopt(flatten))]
     pub tcp_options: crate::tcp_options::TcpOptions,
 }
 

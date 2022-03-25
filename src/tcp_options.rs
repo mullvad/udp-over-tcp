@@ -2,34 +2,33 @@
 use nix::sys::socket::{getsockopt, setsockopt, sockopt};
 use std::fmt;
 use std::io;
-use std::num::ParseIntError;
 #[cfg(target_os = "linux")]
 use std::os::unix::io::AsRawFd;
-use std::str::FromStr;
 use std::time::Duration;
 use tokio::net::TcpSocket;
 
 /// Options to apply to the TCP socket involved in the tunneling.
-#[derive(Debug, Default, Clone, structopt::StructOpt)]
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
 pub struct TcpOptions {
     /// If given, sets the SO_RCVBUF option on the TCP socket to the given number of bytes.
     /// Changes the size of the operating system's receive buffer associated with the socket.
-    #[structopt(long = "recv-buffer")]
+    #[cfg_attr(feature = "structopt", structopt(long = "recv-buffer"))]
     pub recv_buffer_size: Option<u32>,
 
     /// If given, sets the SO_SNDBUF option on the TCP socket to the given number of bytes.
     /// Changes the size of the operating system's send buffer associated with the socket.
-    #[structopt(long = "send-buffer")]
+    #[cfg_attr(feature = "structopt", structopt(long = "send-buffer"))]
     pub send_buffer_size: Option<u32>,
 
     /// An application timeout on receiving data from the TCP socket.
-    #[structopt(long = "tcp-recv-timeout", parse(try_from_str = duration_secs_from_str))]
+    #[cfg_attr(feature = "structopt", structopt(long = "tcp-recv-timeout", parse(try_from_str = duration_secs_from_str)))]
     pub recv_timeout: Option<Duration>,
 
     /// If given, sets the SO_MARK option on the TCP socket.
     /// This exists only on Linux.
     #[cfg(target_os = "linux")]
-    #[structopt(long = "fwmark")]
+    #[cfg_attr(feature = "structopt", structopt(long = "fwmark"))]
     pub fwmark: Option<u32>,
 }
 
@@ -71,7 +70,9 @@ impl std::error::Error for ApplyTcpOptionsError {
     }
 }
 
-fn duration_secs_from_str(str_duration: &str) -> Result<Duration, ParseIntError> {
+#[cfg(feature = "structopt")]
+fn duration_secs_from_str(str_duration: &str) -> Result<Duration, std::num::ParseIntError> {
+    use std::str::FromStr;
     u64::from_str(str_duration).map(Duration::from_secs)
 }
 
