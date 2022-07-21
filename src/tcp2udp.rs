@@ -23,11 +23,8 @@ pub struct Options {
     pub udp_forward_addr: SocketAddr,
 
     /// Which local IP to bind the UDP socket to.
-    #[cfg_attr(
-        feature = "structopt",
-        structopt(long = "udp-bind", default_value = "0.0.0.0")
-    )]
-    pub udp_bind_ip: IpAddr,
+    #[cfg_attr(feature = "structopt", structopt(long = "udp-bind"))]
+    pub udp_bind_ip: Option<IpAddr>,
 
     #[cfg_attr(feature = "structopt", structopt(flatten))]
     pub tcp_options: crate::tcp_options::TcpOptions,
@@ -90,12 +87,19 @@ pub async fn run(options: Options) -> Result<Infallible, Tcp2UdpError> {
         return Err(Tcp2UdpError::NoTcpListenAddrs);
     }
 
+    let udp_bind_ip = options.udp_bind_ip.unwrap_or_else(|| {
+        if options.udp_forward_addr.is_ipv4() {
+            "0.0.0.0".parse().unwrap()
+        } else {
+            "::".parse().unwrap()
+        }
+    });
+
     let mut join_handles = Vec::with_capacity(options.tcp_listen_addrs.len());
     for tcp_listen_addr in options.tcp_listen_addrs {
         let tcp_listener = create_listening_socket(tcp_listen_addr, &options.tcp_options)?;
         log::info!("Listening on {}/TCP", tcp_listener.local_addr().unwrap());
 
-        let udp_bind_ip = options.udp_bind_ip;
         let udp_forward_addr = options.udp_forward_addr;
         let tcp_recv_timeout = options.tcp_options.recv_timeout;
         join_handles.push(tokio::spawn(async move {
