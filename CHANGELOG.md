@@ -22,7 +22,9 @@ Line wrap the file at 100 chars.                                              Th
 
 
 ## [Unreleased]
-
+### Fixed
+- When `tcp2udp` is run, select the address family for the UDP socket based on the
+  destination address. Previously, `AF_INET` was always used by default.
 
 ## [0.2.0] - 2022-03-23
 ### Added
