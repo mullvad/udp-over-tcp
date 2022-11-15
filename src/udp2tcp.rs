@@ -5,7 +5,6 @@ use crate::logging::Redact;
 use std::fmt;
 use std::io;
 use std::net::SocketAddr;
-use std::time::Duration;
 use tokio::net::{TcpSocket, TcpStream, UdpSocket};
 
 #[derive(Debug)]
@@ -48,6 +47,7 @@ impl std::error::Error for ConnectError {
 pub enum ForwardError {
     ReadUdp(io::Error),
     ConnectUdp(io::Error),
+    ConnectTcp(ConnectError),
 }
 
 impl fmt::Display for ForwardError {
@@ -56,6 +56,7 @@ impl fmt::Display for ForwardError {
         match self {
             ReadUdp(_) => "Failed receiving the first UDP datagram".fmt(f),
             ConnectUdp(_) => "Failed to connect UDP socket to peer".fmt(f),
+            ConnectTcp(error) => error.fmt(f),
         }
     }
 }
@@ -66,28 +67,33 @@ impl std::error::Error for ForwardError {
         match self {
             ReadUdp(e) => Some(e),
             ConnectUdp(e) => Some(e),
+            ConnectTcp(e) => Some(e),
         }
     }
 }
 
 /// Struct allowing listening on UDP and forwarding the traffic over TCP.
 pub struct Udp2Tcp {
-    tcp_stream: TcpStream,
+    tcp_stream: Option<TcpStream>,
     udp_socket: UdpSocket,
     tcp_forward_addr: SocketAddr,
-    tcp_recv_timeout: Option<Duration>,
+    tcp_options: crate::TcpOptions,
 }
 
 impl Udp2Tcp {
-    /// Connects to the given TCP address and binds to the given UDP address.
+    /// Connects to the given TCP address (unless `TcpOptions::lazy_connect` is true) and binds to
+    /// the given UDP address.
     /// Just calling this constructor won't forward any traffic over the sockets (see `run`).
     pub async fn new(
         udp_listen_addr: SocketAddr,
         tcp_forward_addr: SocketAddr,
         tcp_options: crate::TcpOptions,
     ) -> Result<Self, ConnectError> {
-        let tcp_stream = Self::connect_tcp_socket(tcp_forward_addr, &tcp_options).await?;
-        log::info!("Connected to {}/TCP", tcp_forward_addr);
+        let tcp_stream = if !tcp_options.lazy_connect {
+            Some(Self::connect_tcp_socket(tcp_forward_addr, &tcp_options).await?)
+        } else {
+            None
+        };
 
         let udp_socket = UdpSocket::bind(udp_listen_addr)
             .await
@@ -101,7 +107,7 @@ impl Udp2Tcp {
             tcp_stream,
             udp_socket,
             tcp_forward_addr,
-            tcp_recv_timeout: tcp_options.recv_timeout,
+            tcp_options,
         })
     }
 
@@ -121,6 +127,9 @@ impl Udp2Tcp {
             .connect(addr)
             .await
             .map_err(ConnectError::ConnectTcp)?;
+
+        log::info!("Connected to {}/TCP", addr);
+
         Ok(tcp_stream)
     }
 
@@ -133,7 +142,7 @@ impl Udp2Tcp {
     }
 
     /// Runs the forwarding until the TCP socket is closed, or an error occur.
-    pub async fn run(self) -> Result<(), ForwardError> {
+    pub async fn run(mut self) -> Result<(), ForwardError> {
         // Wait for the first datagram, to get the UDP peer_addr to connect to.
         let mut tmp_buffer = crate::forward_traffic::datagram_buffer();
         let (_udp_read_len, udp_peer_addr) = self
@@ -142,6 +151,13 @@ impl Udp2Tcp {
             .await
             .map_err(ForwardError::ReadUdp)?;
         log::info!("Incoming connection from {}/UDP", Redact(udp_peer_addr));
+
+        let tcp_stream = match self.tcp_stream.take() {
+            Some(tcp_stream) => tcp_stream,
+            None => Self::connect_tcp_socket(self.tcp_forward_addr, &self.tcp_options)
+                .await
+                .map_err(ForwardError::ConnectTcp)?,
+        };
 
         // Connect the UDP socket to whoever sent the first datagram. This is where
         // all the returned traffic will be sent to.
@@ -152,8 +168,8 @@ impl Udp2Tcp {
 
         crate::forward_traffic::process_udp_over_tcp(
             self.udp_socket,
-            self.tcp_stream,
-            self.tcp_recv_timeout,
+            tcp_stream,
+            self.tcp_options.recv_timeout,
         )
         .await;
         log::debug!(

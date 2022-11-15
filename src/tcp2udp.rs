@@ -195,7 +195,7 @@ async fn process_socket(
             .local_addr()
             .ok()
             .as_ref()
-            .map(|item| -> &dyn fmt::Display { &*item })
+            .map(|item| -> &dyn fmt::Display { item })
             .unwrap_or(&"unknown"),
         udp_peer_addr
     );
