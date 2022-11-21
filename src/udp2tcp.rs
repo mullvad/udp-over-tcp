@@ -7,6 +7,9 @@ use std::io;
 use std::net::SocketAddr;
 use tokio::net::{TcpSocket, TcpStream, UdpSocket};
 
+#[cfg(unix)]
+use std::os::unix::io::{AsRawFd, RawFd};
+
 #[derive(Debug)]
 pub enum ConnectError {
     /// Failed to create the TCP socket.
@@ -74,7 +77,7 @@ impl std::error::Error for ForwardError {
 
 /// Struct allowing listening on UDP and forwarding the traffic over TCP.
 pub struct Udp2Tcp {
-    tcp_stream: Option<TcpStream>,
+    tcp_socket: TcpForwardSocket,
     udp_socket: UdpSocket,
     tcp_forward_addr: SocketAddr,
     tcp_options: crate::TcpOptions,
@@ -89,11 +92,10 @@ impl Udp2Tcp {
         tcp_forward_addr: SocketAddr,
         tcp_options: crate::TcpOptions,
     ) -> Result<Self, ConnectError> {
-        let tcp_stream = if !tcp_options.lazy_connect {
-            Some(Self::connect_tcp_socket(tcp_forward_addr, &tcp_options).await?)
-        } else {
-            None
-        };
+        let mut tcp_socket = TcpForwardSocket::new(tcp_forward_addr, &tcp_options)?;
+        if !tcp_options.lazy_connect {
+            tcp_socket = TcpForwardSocket::Stream(tcp_socket.connect().await?);
+        }
 
         let udp_socket = UdpSocket::bind(udp_listen_addr)
             .await
@@ -104,33 +106,11 @@ impl Udp2Tcp {
         }
 
         Ok(Self {
-            tcp_stream,
+            tcp_socket,
             udp_socket,
             tcp_forward_addr,
             tcp_options,
         })
-    }
-
-    async fn connect_tcp_socket(
-        addr: SocketAddr,
-        options: &crate::TcpOptions,
-    ) -> Result<TcpStream, ConnectError> {
-        let tcp_socket = match addr {
-            SocketAddr::V4(..) => TcpSocket::new_v4(),
-            SocketAddr::V6(..) => TcpSocket::new_v6(),
-        }
-        .map_err(ConnectError::CreateTcpSocket)?;
-
-        crate::tcp_options::apply(&tcp_socket, options).map_err(ConnectError::ApplyTcpOptions)?;
-
-        let tcp_stream = tcp_socket
-            .connect(addr)
-            .await
-            .map_err(ConnectError::ConnectTcp)?;
-
-        log::info!("Connected to {}/TCP", addr);
-
-        Ok(tcp_stream)
     }
 
     /// Returns the UDP address this instance is listening on for incoming datagrams to forward.
@@ -141,8 +121,14 @@ impl Udp2Tcp {
         self.udp_socket.local_addr()
     }
 
+    /// Returns the raw file descriptor for the TCP socket that datagrams are forwarded to.
+    #[cfg(unix)]
+    pub fn remote_tcp_fd(&self) -> RawFd {
+        self.tcp_socket.as_raw_fd()
+    }
+
     /// Runs the forwarding until the TCP socket is closed, or an error occur.
-    pub async fn run(mut self) -> Result<(), ForwardError> {
+    pub async fn run(self) -> Result<(), ForwardError> {
         // Wait for the first datagram, to get the UDP peer_addr to connect to.
         let mut tmp_buffer = crate::forward_traffic::datagram_buffer();
         let (_udp_read_len, udp_peer_addr) = self
@@ -152,12 +138,11 @@ impl Udp2Tcp {
             .map_err(ForwardError::ReadUdp)?;
         log::info!("Incoming connection from {}/UDP", Redact(udp_peer_addr));
 
-        let tcp_stream = match self.tcp_stream.take() {
-            Some(tcp_stream) => tcp_stream,
-            None => Self::connect_tcp_socket(self.tcp_forward_addr, &self.tcp_options)
-                .await
-                .map_err(ForwardError::ConnectTcp)?,
-        };
+        let tcp_stream = self
+            .tcp_socket
+            .connect()
+            .await
+            .map_err(ForwardError::ConnectTcp)?;
 
         // Connect the UDP socket to whoever sent the first datagram. This is where
         // all the returned traffic will be sent to.
@@ -179,5 +164,54 @@ impl Udp2Tcp {
         );
 
         Ok(())
+    }
+}
+
+enum TcpForwardSocket {
+    Socket((TcpSocket, SocketAddr)),
+    Stream(TcpStream),
+}
+
+impl TcpForwardSocket {
+    fn new(
+        tcp_forward_addr: SocketAddr,
+        options: &crate::TcpOptions,
+    ) -> Result<Self, ConnectError> {
+        let socket = match &tcp_forward_addr {
+            SocketAddr::V4(..) => TcpSocket::new_v4(),
+            SocketAddr::V6(..) => TcpSocket::new_v6(),
+        }
+        .map_err(ConnectError::CreateTcpSocket)?;
+
+        crate::tcp_options::apply(&socket, options).map_err(ConnectError::ApplyTcpOptions)?;
+
+        Ok(TcpForwardSocket::Socket((socket, tcp_forward_addr)))
+    }
+
+    async fn connect(self) -> Result<TcpStream, ConnectError> {
+        match self {
+            TcpForwardSocket::Socket((socket, addr)) => {
+                log::info!("Connecting to {}/TCP", addr);
+
+                let tcp_stream = socket
+                    .connect(addr)
+                    .await
+                    .map_err(ConnectError::ConnectTcp)?;
+
+                log::info!("Connected to {}/TCP", addr);
+                Ok(tcp_stream)
+            }
+            TcpForwardSocket::Stream(stream) => Ok(stream),
+        }
+    }
+}
+
+#[cfg(unix)]
+impl AsRawFd for TcpForwardSocket {
+    fn as_raw_fd(&self) -> RawFd {
+        match self {
+            TcpForwardSocket::Socket((sock, _)) => sock.as_raw_fd(),
+            TcpForwardSocket::Stream(stream) => stream.as_raw_fd(),
+        }
     }
 }
