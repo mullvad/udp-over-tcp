@@ -94,7 +94,7 @@ impl Udp2Tcp {
     ) -> Result<Self, ConnectError> {
         let mut tcp_socket = TcpForwardSocket::new(tcp_forward_addr, &tcp_options)?;
         if !tcp_options.lazy_connect {
-            tcp_socket = tcp_socket.connect().await?;
+            tcp_socket = TcpForwardSocket::Stream(tcp_socket.connect().await?);
         }
 
         let udp_socket = UdpSocket::bind(udp_listen_addr)
@@ -138,7 +138,7 @@ impl Udp2Tcp {
             .map_err(ForwardError::ReadUdp)?;
         log::info!("Incoming connection from {}/UDP", Redact(udp_peer_addr));
 
-        let tcp_socket = self
+        let tcp_stream = self
             .tcp_socket
             .connect()
             .await
@@ -153,7 +153,7 @@ impl Udp2Tcp {
 
         crate::forward_traffic::process_udp_over_tcp(
             self.udp_socket,
-            tcp_socket.unwrap_tcp_stream(),
+            tcp_stream,
             self.tcp_options.recv_timeout,
         )
         .await;
@@ -188,25 +188,20 @@ impl TcpForwardSocket {
         Ok(TcpForwardSocket::Socket((socket, tcp_forward_addr)))
     }
 
-    async fn connect(mut self) -> Result<TcpForwardSocket, ConnectError> {
-        if let TcpForwardSocket::Socket((socket, addr)) = self {
-            log::info!("Connecting to {}/TCP", addr);
-
-            let tcp_stream = socket
-                .connect(addr)
-                .await
-                .map_err(ConnectError::ConnectTcp)?;
-
-            log::info!("Connected to {}/TCP", addr);
-            self = TcpForwardSocket::Stream(tcp_stream);
-        }
-        Ok(self)
-    }
-
-    fn unwrap_tcp_stream(self) -> TcpStream {
+    async fn connect(self) -> Result<TcpStream, ConnectError> {
         match self {
-            TcpForwardSocket::Stream(stream) => stream,
-            _ => panic!("expected Stream variant for call to unwrap_stream"),
+            TcpForwardSocket::Socket((socket, addr)) => {
+                log::info!("Connecting to {}/TCP", addr);
+
+                let tcp_stream = socket
+                    .connect(addr)
+                    .await
+                    .map_err(ConnectError::ConnectTcp)?;
+
+                log::info!("Connected to {}/TCP", addr);
+                Ok(tcp_stream)
+            }
+            TcpForwardSocket::Stream(stream) => Ok(stream),
         }
     }
 }
