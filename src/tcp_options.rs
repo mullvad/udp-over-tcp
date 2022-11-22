@@ -25,10 +25,6 @@ pub struct TcpOptions {
     #[cfg_attr(feature = "structopt", structopt(long = "tcp-recv-timeout", parse(try_from_str = duration_secs_from_str)))]
     pub recv_timeout: Option<Duration>,
 
-    /// If true, wait for the first incoming UDP datagram before connecting to the TCP endpoint.
-    #[cfg_attr(feature = "structopt", structopt(skip))]
-    pub lazy_connect: bool,
-
     /// If given, sets the SO_MARK option on the TCP socket.
     /// This exists only on Linux.
     #[cfg(target_os = "linux")]
