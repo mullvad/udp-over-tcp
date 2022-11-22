@@ -18,6 +18,12 @@ pub enum Error {
     ApplyTcpOptions(crate::tcp_options::ApplyTcpOptionsError),
     /// Failed to bind UDP socket locally.
     BindUdp(io::Error),
+    /// Failed to read from UDP socket.
+    ReadUdp(io::Error),
+    /// Failed to connect UDP socket to the incoming address.
+    ConnectUdp(io::Error),
+    /// Failed to connect TCP socket to forward address.
+    ConnectTcp(io::Error),
 }
 
 impl fmt::Display for Error {
@@ -27,6 +33,9 @@ impl fmt::Display for Error {
             CreateTcpSocket(_) => "Failed to create the TCP socket".fmt(f),
             ApplyTcpOptions(e) => e.fmt(f),
             BindUdp(_) => "Failed to bind UDP socket locally".fmt(f),
+            ReadUdp(_) => "Failed receiving the first UDP datagram".fmt(f),
+            ConnectUdp(_) => "Failed to connect UDP socket to peer".fmt(f),
+            ConnectTcp(_) => "Failed to connect to TCP forward address".fmt(f),
         }
     }
 }
@@ -38,32 +47,6 @@ impl std::error::Error for Error {
             CreateTcpSocket(e) => Some(e),
             ApplyTcpOptions(e) => e.source(),
             BindUdp(e) => Some(e),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum ForwardError {
-    ReadUdp(io::Error),
-    ConnectUdp(io::Error),
-    ConnectTcp(io::Error),
-}
-
-impl fmt::Display for ForwardError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ForwardError::*;
-        match self {
-            ReadUdp(_) => "Failed receiving the first UDP datagram".fmt(f),
-            ConnectUdp(_) => "Failed to connect UDP socket to peer".fmt(f),
-            ConnectTcp(_) => "Failed to connect to TCP forward address".fmt(f),
-        }
-    }
-}
-
-impl std::error::Error for ForwardError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use ForwardError::*;
-        match self {
             ReadUdp(e) => Some(e),
             ConnectUdp(e) => Some(e),
             ConnectTcp(e) => Some(e),
@@ -127,14 +110,14 @@ impl Udp2Tcp {
 
     /// Connects to the TCP address and runs the forwarding until the TCP socket is closed, or
     /// an error occur.
-    pub async fn run(self) -> Result<(), ForwardError> {
+    pub async fn run(self) -> Result<(), Error> {
         // Wait for the first datagram, to get the UDP peer_addr to connect to.
         let mut tmp_buffer = crate::forward_traffic::datagram_buffer();
         let (_udp_read_len, udp_peer_addr) = self
             .udp_socket
             .peek_from(tmp_buffer.as_mut())
             .await
-            .map_err(ForwardError::ReadUdp)?;
+            .map_err(Error::ReadUdp)?;
         log::info!("Incoming connection from {}/UDP", Redact(udp_peer_addr));
 
         log::info!("Connecting to {}/TCP", self.tcp_forward_addr);
@@ -142,7 +125,7 @@ impl Udp2Tcp {
             .tcp_socket
             .connect(self.tcp_forward_addr)
             .await
-            .map_err(ForwardError::ConnectTcp)?;
+            .map_err(Error::ConnectTcp)?;
         log::info!("Connected to {}/TCP", self.tcp_forward_addr);
 
         // Connect the UDP socket to whoever sent the first datagram. This is where
@@ -150,7 +133,7 @@ impl Udp2Tcp {
         self.udp_socket
             .connect(udp_peer_addr)
             .await
-            .map_err(ForwardError::ConnectUdp)?;
+            .map_err(Error::ConnectUdp)?;
 
         crate::forward_traffic::process_udp_over_tcp(
             self.udp_socket,
