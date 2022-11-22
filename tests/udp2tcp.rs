@@ -114,11 +114,7 @@ async fn pong_two_separate() -> Result<(), Box<dyn std::error::Error>> {
 /// Spawns a Udp2Tcp instance and connects to boths ends of it.
 /// Returns the UDP and TCP sockets that goes through it.
 async fn setup_udp2tcp() -> Result<
-    (
-        UdpSocket,
-        TcpStream,
-        JoinHandle<Result<(), udp2tcp::ForwardError>>,
-    ),
+    (UdpSocket, TcpStream, JoinHandle<Result<(), udp2tcp::Error>>),
     Box<dyn std::error::Error>,
 > {
     let tcp_listener = TcpListener::bind("127.0.0.1:0").await?;
@@ -130,13 +126,18 @@ async fn setup_udp2tcp() -> Result<
         TcpOptions::default(),
     )
     .await?;
-    let tcp_stream = tcp_listener.accept().await?.0;
 
     let udp_listen_addr = udp2tcp.local_udp_addr().unwrap();
     let join_handle = tokio::spawn(udp2tcp.run());
 
     let udp_socket = UdpSocket::bind("127.0.0.1:0").await?;
     udp_socket.connect(udp_listen_addr).await?;
+
+    // Send empty datagram to connect TCP socket
+    udp_socket.send(&[]).await?;
+    let mut tcp_stream = tcp_listener.accept().await?.0;
+    let mut buf = [0; 1024];
+    tcp_stream.read(&mut buf).await?;
 
     Ok((udp_socket, tcp_stream, join_handle))
 }
