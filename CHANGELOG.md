@@ -28,6 +28,7 @@ Line wrap the file at 100 chars.                                              Th
 
 ### Changed
 - Upgrade to `clap 4` instead of `structopt`.
+- MSRV increased to 1.60.0 due to `clap` upgrade.
 
 ## [0.2.0] - 2022-03-23
 ### Added
