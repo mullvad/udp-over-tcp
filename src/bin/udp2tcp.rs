@@ -1,23 +1,23 @@
 #![forbid(unsafe_code)]
 
+use clap::Parser;
 use err_context::BoxedErrorExt as _;
 use std::net::SocketAddr;
-use structopt::StructOpt;
 
 use udp_over_tcp::udp2tcp;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "udp2tcp", about = "Listen for incoming UDP and forward to TCP")]
+#[derive(Debug, Parser)]
+#[command(name = "udp2tcp", about = "Listen for incoming UDP and forward to TCP")]
 pub struct Options {
     /// The IP and UDP port to bind to and accept incoming connections on.
-    #[structopt(long = "udp-listen")]
+    #[arg(long = "udp-listen")]
     pub udp_listen_addr: SocketAddr,
 
     /// The IP and TCP port to forward all UDP traffic to.
-    #[structopt(long = "tcp-forward")]
+    #[arg(long = "tcp-forward")]
     pub tcp_forward_addr: SocketAddr,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub tcp_options: udp_over_tcp::TcpOptions,
 }
 
@@ -26,7 +26,7 @@ async fn main() {
     #[cfg(feature = "env_logger")]
     env_logger::init();
 
-    let options = Options::from_args();
+    let options = Options::parse();
     if let Err(error) = run(options).await {
         log::error!("Error: {}", error.display("\nCaused by: "));
         std::process::exit(1);

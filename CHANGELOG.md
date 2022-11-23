@@ -26,6 +26,9 @@ Line wrap the file at 100 chars.                                              Th
 - When `tcp2udp` is run, select the address family for the UDP socket based on the
   destination address. Previously, `AF_INET` was always used by default.
 
+### Changed
+- Upgrade to `clap 4` instead of `structopt`.
+
 ## [0.2.0] - 2022-03-23
 ### Added
 - Add a helper build script (`build-static-bins.sh`) to build the binaries

@@ -55,8 +55,7 @@ jobs:
           version: latest
           use-tool-cache: true
       - name: Audit
-        # Ignore warning about ansi_term being unmaintained
-        run: cargo audit --deny warnings --ignore RUSTSEC-2021-0139
+        run: cargo audit --deny warnings
 
 
   build-and-test:
