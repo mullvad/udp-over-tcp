@@ -1,20 +1,20 @@
 #![forbid(unsafe_code)]
 
+use clap::Parser;
 use err_context::ErrorExt as _;
 use std::num::NonZeroU8;
-use structopt::StructOpt;
 
 use udp_over_tcp::{tcp2udp, NeverOkResult};
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "tcp2udp", about = "Listen for incoming TCP and forward to UDP")]
+#[derive(Debug, Parser)]
+#[command(name = "tcp2udp", about = "Listen for incoming TCP and forward to UDP")]
 pub struct Options {
     /// Sets the number of worker threads to use.
     /// The default value is the number of cores available to the system.
-    #[structopt(long = "threads")]
+    #[arg(long = "threads")]
     threads: Option<NonZeroU8>,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     tcp2udp_options: tcp2udp::Options,
 }
 
@@ -22,7 +22,7 @@ fn main() {
     #[cfg(feature = "env_logger")]
     env_logger::init();
 
-    let options = Options::from_args();
+    let options = Options::parse();
 
     let runtime = create_runtime(options.threads);
 

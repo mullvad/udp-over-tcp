@@ -11,22 +11,23 @@ use std::time::Duration;
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 
 #[derive(Debug)]
-#[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
+#[cfg_attr(feature = "clap", group(skip))]
 pub struct Options {
     /// The IP and TCP port(s) to listen to for incoming traffic from udp2tcp.
     /// Supports binding multiple TCP sockets.
-    #[cfg_attr(feature = "structopt", structopt(long = "tcp-listen", required(true)))]
+    #[cfg_attr(feature = "clap", arg(long = "tcp-listen", required(true)))]
     pub tcp_listen_addrs: Vec<SocketAddr>,
 
-    #[cfg_attr(feature = "structopt", structopt(long = "udp-forward"))]
+    #[cfg_attr(feature = "clap", arg(long = "udp-forward"))]
     /// The IP and UDP port to forward all traffic to.
     pub udp_forward_addr: SocketAddr,
 
     /// Which local IP to bind the UDP socket to.
-    #[cfg_attr(feature = "structopt", structopt(long = "udp-bind"))]
+    #[cfg_attr(feature = "clap", arg(long = "udp-bind"))]
     pub udp_bind_ip: Option<IpAddr>,
 
-    #[cfg_attr(feature = "structopt", structopt(flatten))]
+    #[cfg_attr(feature = "clap", clap(flatten))]
     pub tcp_options: crate::tcp_options::TcpOptions,
 }
 
