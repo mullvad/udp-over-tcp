@@ -55,8 +55,7 @@ jobs:
           version: latest
           use-tool-cache: true
       - name: Audit
-        # Ignore warning about ansi_term being unmaintained
-        run: cargo audit --deny warnings --ignore RUSTSEC-2021-0139
+        run: cargo audit --deny warnings
 
 
   build-and-test:
@@ -70,7 +69,7 @@ jobs:
           - os: ubuntu-latest
             # MSRV. Not considered breaking when this has to be bumped.
             # But should be mentioned in the changelog.
-            rust: 1.56.0
+            rust: 1.60.0
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2

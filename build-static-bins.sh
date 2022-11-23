@@ -11,5 +11,5 @@ RUSTFLAGS="-C target-feature=+crt-static" \
     cargo build --release \
     --target x86_64-unknown-linux-gnu \
     --features env_logger \
-    --features structopt \
+    --features clap \
     --bins
