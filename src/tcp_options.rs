@@ -30,6 +30,12 @@ pub struct TcpOptions {
     #[cfg(target_os = "linux")]
     #[cfg_attr(feature = "clap", arg(long = "fwmark"))]
     pub fwmark: Option<u32>,
+
+    /// Enables TCP_NODELAY on the TCP socket.
+    /// This exists only on Linux for now.
+    #[cfg(target_os = "linux")]
+    #[cfg_attr(feature = "clap", arg(long))]
+    pub nodelay: bool,
 }
 
 #[derive(Debug)]
@@ -43,6 +49,10 @@ pub enum ApplyTcpOptionsError {
     /// Failed to get/set SO_MARK
     #[cfg(target_os = "linux")]
     Mark(nix::Error),
+
+    /// Failed to get/set TCP_NODELAY
+    #[cfg(target_os = "linux")]
+    TcpNoDelay(nix::Error),
 }
 
 impl fmt::Display for ApplyTcpOptionsError {
@@ -53,6 +63,8 @@ impl fmt::Display for ApplyTcpOptionsError {
             SendBuffer(_) => "Failed to get/set TCP_SNDBUF",
             #[cfg(target_os = "linux")]
             Mark(_) => "Failed to get/set SO_MARK",
+            #[cfg(target_os = "linux")]
+            TcpNoDelay(_) => "Failed to get/set TCP_NODELAY",
         }
         .fmt(f)
     }
@@ -66,6 +78,8 @@ impl std::error::Error for ApplyTcpOptionsError {
             SendBuffer(e) => Some(e),
             #[cfg(target_os = "linux")]
             Mark(e) => Some(e),
+            #[cfg(target_os = "linux")]
+            TcpNoDelay(e) => Some(e),
         }
     }
 }
@@ -109,6 +123,17 @@ pub fn apply(socket: &TcpSocket, options: &TcpOptions) -> Result<(), ApplyTcpOpt
         log::debug!(
             "SO_MARK: {}",
             getsockopt(fd, sockopt::Mark).map_err(ApplyTcpOptionsError::Mark)?
+        );
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let fd = socket.as_raw_fd();
+        if options.nodelay {
+            setsockopt(fd, sockopt::TcpNoDelay, &true).map_err(ApplyTcpOptionsError::TcpNoDelay)?;
+        }
+        log::debug!(
+            "TCP_NODELAY: {}",
+            getsockopt(fd, sockopt::TcpNoDelay).map_err(ApplyTcpOptionsError::TcpNoDelay)?
         );
     }
     Ok(())
