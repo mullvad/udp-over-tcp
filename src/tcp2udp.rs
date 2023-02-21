@@ -2,7 +2,7 @@
 //! to UDP.
 
 use crate::logging::Redact;
-use err_context::{BoxedErrorExt as _, ResultExt as _};
+use err_context::{BoxedErrorExt as _, ErrorExt as _, ResultExt as _};
 use std::convert::Infallible;
 use std::fmt;
 use std::io;
@@ -103,12 +103,14 @@ pub async fn run(options: Options) -> Result<Infallible, Tcp2UdpError> {
 
         let udp_forward_addr = options.udp_forward_addr;
         let tcp_recv_timeout = options.tcp_options.recv_timeout;
+        let tcp_nodelay = options.tcp_options.nodelay;
         join_handles.push(tokio::spawn(async move {
             process_tcp_listener(
                 tcp_listener,
                 udp_bind_ip,
                 udp_forward_addr,
                 tcp_recv_timeout,
+                tcp_nodelay,
             )
             .await;
         }));
@@ -145,12 +147,15 @@ async fn process_tcp_listener(
     udp_bind_ip: IpAddr,
     udp_forward_addr: SocketAddr,
     tcp_recv_timeout: Option<Duration>,
+    tcp_nodelay: bool,
 ) -> ! {
     loop {
         match tcp_listener.accept().await {
             Ok((tcp_stream, tcp_peer_addr)) => {
                 log::debug!("Incoming connection from {}/TCP", Redact(tcp_peer_addr));
-
+                if let Err(error) = crate::tcp_options::set_nodelay(&tcp_stream, tcp_nodelay) {
+                    log::error!("Error: {}", error.display("\nCaused by: "));
+                }
                 tokio::spawn(async move {
                     if let Err(error) = process_socket(
                         tcp_stream,

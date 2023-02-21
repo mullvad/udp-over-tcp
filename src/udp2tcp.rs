@@ -128,6 +128,9 @@ impl Udp2Tcp {
             .map_err(Error::ConnectTcp)?;
         log::info!("Connected to {}/TCP", self.tcp_forward_addr);
 
+        crate::tcp_options::set_nodelay(&tcp_stream, self.tcp_options.nodelay)
+            .map_err(Error::ApplyTcpOptions)?;
+
         // Connect the UDP socket to whoever sent the first datagram. This is where
         // all the returned traffic will be sent to.
         self.udp_socket
