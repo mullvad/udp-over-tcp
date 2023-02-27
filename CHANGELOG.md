@@ -22,10 +22,12 @@ Line wrap the file at 100 chars.                                              Th
 
 
 ## [Unreleased]
+
+
+## [0.3.0] - 2023-02-28
 ### Added
-- Add support for disabling the Nagle algorithm by setting `TcpOptions.nodelay
-  = true`, and expose it as a `--nodelay` flag on the `udp2tcp` and `tcp2udp`
-  binaries.
+- Add support for disabling the Nagle algorithm by setting `TcpOptions.nodelay = true`,
+  and expose it as a `--nodelay` flag on the `udp2tcp` and `tcp2udp` binaries.
 
 ### Fixed
 - When `tcp2udp` is run, select the address family for the UDP socket based on the
@@ -34,6 +36,7 @@ Line wrap the file at 100 chars.                                              Th
 ### Changed
 - Upgrade to `clap 4` instead of `structopt`.
 - MSRV increased to 1.64.0 due to `clap` upgrade.
+
 
 ## [0.2.0] - 2022-03-23
 ### Added
@@ -53,6 +56,7 @@ Line wrap the file at 100 chars.                                              Th
   stack sizes in debug builds.
 
 ... And more. We never really cut any 0.1.0 release
+
 
 ## [0.1.0] - ?
 There never was a real 0.1.0 release. We just kept using the main branch commits
