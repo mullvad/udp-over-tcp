@@ -29,6 +29,10 @@ futures = "0.3.25"
 clap = { version = "4.0", features = ["derive"], optional = true }
 lazy_static = "1.4.0"
 
+# It seems that socket2 0.5 broke compatibility with tokio sockets:
+# https://github.com/rust-lang/socket2/issues/402
+socket2 = "0.4"
+
 # Only used by the binaries in src/bin/ and is optional so it's not
 # pulled in when built as a library.
 env_logger = { version = "0.9", optional = true }
