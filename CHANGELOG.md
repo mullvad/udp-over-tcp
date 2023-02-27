@@ -22,13 +22,18 @@ Line wrap the file at 100 chars.                                              Th
 
 
 ## [Unreleased]
+### Added
+- Add support for disabling the Nagle algorithm by setting `TcpOptions.nodelay
+  = true`, and expose it as a `--nodelay` flag on the `udp2tcp` and `tcp2udp`
+  binaries.
+
 ### Fixed
 - When `tcp2udp` is run, select the address family for the UDP socket based on the
   destination address. Previously, `AF_INET` was always used by default.
 
 ### Changed
 - Upgrade to `clap 4` instead of `structopt`.
-- MSRV increased to 1.60.0 due to `clap` upgrade.
+- MSRV increased to 1.64.0 due to `clap` upgrade.
 
 ## [0.2.0] - 2022-03-23
 ### Added
