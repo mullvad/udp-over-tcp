@@ -55,12 +55,7 @@ jobs:
           version: latest
           use-tool-cache: true
       - name: Audit
-        # The vulnerability affects custom global allocators, so it
-        # should be safe to ignore it. Stop ignoring the warning once
-        # atty has been replaced in clap and env_logger:
-        # https://github.com/clap-rs/clap/pull/4249
-        # https://github.com/rust-cli/env_logger/pull/246
-        run: cargo audit --deny warnings --ignore RUSTSEC-2021-0145
+        run: cargo audit --deny warnings
 
 
   build-and-test:
