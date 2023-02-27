@@ -5,7 +5,7 @@ use std::io;
 #[cfg(target_os = "linux")]
 use std::os::unix::io::AsRawFd;
 use std::time::Duration;
-use tokio::net::TcpSocket;
+use tokio::net::{TcpSocket, TcpStream};
 
 /// Options to apply to the TCP socket involved in the tunneling.
 #[derive(Debug, Default, Clone)]
@@ -30,6 +30,10 @@ pub struct TcpOptions {
     #[cfg(target_os = "linux")]
     #[cfg_attr(feature = "clap", arg(long = "fwmark"))]
     pub fwmark: Option<u32>,
+
+    /// Enables TCP_NODELAY on the TCP socket.
+    #[cfg_attr(feature = "clap", arg(long))]
+    pub nodelay: bool,
 }
 
 #[derive(Debug)]
@@ -43,6 +47,9 @@ pub enum ApplyTcpOptionsError {
     /// Failed to get/set SO_MARK
     #[cfg(target_os = "linux")]
     Mark(nix::Error),
+
+    /// Failed to get/set TCP_NODELAY
+    TcpNoDelay(io::Error),
 }
 
 impl fmt::Display for ApplyTcpOptionsError {
@@ -53,6 +60,7 @@ impl fmt::Display for ApplyTcpOptionsError {
             SendBuffer(_) => "Failed to get/set TCP_SNDBUF",
             #[cfg(target_os = "linux")]
             Mark(_) => "Failed to get/set SO_MARK",
+            TcpNoDelay(_) => "Failed to get/set TCP_NODELAY",
         }
         .fmt(f)
     }
@@ -66,6 +74,7 @@ impl std::error::Error for ApplyTcpOptionsError {
             SendBuffer(e) => Some(e),
             #[cfg(target_os = "linux")]
             Mark(e) => Some(e),
+            TcpNoDelay(e) => Some(e),
         }
     }
 }
@@ -111,5 +120,21 @@ pub fn apply(socket: &TcpSocket, options: &TcpOptions) -> Result<(), ApplyTcpOpt
             getsockopt(fd, sockopt::Mark).map_err(ApplyTcpOptionsError::Mark)?
         );
     }
+    Ok(())
+}
+
+/// We need to apply the nodelay option separately as it is not currently exposed on TcpSocket.
+/// => https://github.com/tokio-rs/tokio/issues/5510
+pub fn set_nodelay(tcp_stream: &TcpStream, nodelay: bool) -> Result<(), ApplyTcpOptionsError> {
+    // Configure TCP_NODELAY on the TCP stream
+    tcp_stream
+        .set_nodelay(nodelay)
+        .map_err(ApplyTcpOptionsError::TcpNoDelay)?;
+    log::debug!(
+        "TCP_NODELAY: {}",
+        tcp_stream
+            .nodelay()
+            .map_err(ApplyTcpOptionsError::TcpNoDelay)?
+    );
     Ok(())
 }
