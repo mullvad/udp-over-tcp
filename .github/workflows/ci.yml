@@ -2,6 +2,7 @@
 name: Build and test
 on:
   - push
+  - pull_request
   # Build if requested manually from the Actions tab
   - workflow_dispatch
 
