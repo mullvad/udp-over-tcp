@@ -7,7 +7,11 @@ use std::num::NonZeroU8;
 use udp_over_tcp::{tcp2udp, NeverOkResult};
 
 #[derive(Debug, Parser)]
-#[command(name = "tcp2udp", about = "Listen for incoming TCP and forward to UDP")]
+#[command(
+    name = "tcp2udp",
+    about = "Listen for incoming TCP and forward to UDP"
+    version,
+)]
 pub struct Options {
     /// Sets the number of worker threads to use.
     /// The default value is the number of cores available to the system.
