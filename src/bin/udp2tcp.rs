@@ -7,7 +7,11 @@ use std::net::SocketAddr;
 use udp_over_tcp::udp2tcp;
 
 #[derive(Debug, Parser)]
-#[command(name = "udp2tcp", about = "Listen for incoming UDP and forward to TCP")]
+#[command(
+    name = "udp2tcp",
+    about = "Listen for incoming UDP and forward to TCP",
+    version
+)]
 pub struct Options {
     /// The IP and UDP port to bind to and accept incoming connections on.
     #[arg(long = "udp-listen")]
