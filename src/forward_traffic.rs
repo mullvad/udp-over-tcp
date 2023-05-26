@@ -3,7 +3,7 @@ use err_context::BoxedErrorExt as _;
 use err_context::ResultExt as _;
 use futures::future::select;
 use futures::pin_mut;
-use std::convert::{Infallible, TryFrom};
+use std::convert::Infallible;
 use std::future::Future;
 use std::io;
 use std::mem;
@@ -101,34 +101,39 @@ async fn maybe_timeout<F: Future>(
 /// Forward all complete datagrams in `buffer` to `udp_out`.
 /// Returns the number of processed bytes.
 async fn forward_datagrams_in_buffer(udp_out: &UdpSocket, buffer: &[u8]) -> io::Result<usize> {
-    let mut header_start = 0;
+    let mut unprocessed_buffer = buffer;
     loop {
-        let header_end = header_start + HEADER_LEN;
-        // "parse" the header
-        let header = match buffer.get(header_start..header_end) {
-            Some(header) => <[u8; HEADER_LEN]>::try_from(header).unwrap(),
-            // Buffer does not contain entire header for next datagram
-            None => break Ok(header_start),
-        };
-        let datagram_len = usize::from(u16::from_be_bytes(header));
-        let datagram_start = header_end;
-        let datagram_end = datagram_start + datagram_len;
-
-        let datagram_data = match buffer.get(datagram_start..datagram_end) {
-            Some(datagram_data) => datagram_data,
+        let (datagram_data, tail) = match split_first_datagram(unprocessed_buffer) {
+            Some(data_tuple) => data_tuple,
             // The buffer does not contain the entire datagram
-            None => break Ok(header_start),
+            None => break Ok(buffer.len() - unprocessed_buffer.len()),
         };
 
         let udp_write_len = udp_out.send(datagram_data).await?;
         assert_eq!(
-            udp_write_len, datagram_len,
+            udp_write_len,
+            datagram_data.len(),
             "Did not send entire UDP datagram"
         );
-        log::trace!("Forwarded {} byte TCP->UDP", datagram_len);
+        log::trace!("Forwarded {} byte TCP->UDP", datagram_data.len());
 
-        header_start = datagram_end;
+        unprocessed_buffer = tail;
     }
+}
+
+/// Parses the header at the beginning of the `buffer` and if it contains a full
+/// `udp-to-tcp` datagram it splits the buffer and returns the datagram data and
+/// buffer tail as two separate slices: `(datagram_data, tail)`
+fn split_first_datagram(buffer: &[u8]) -> Option<(&[u8], &[u8])> {
+    let (header, tail) = buffer.split_first_chunk::<HEADER_LEN>()?;
+    let datagram_len = usize::from(u16::from_be_bytes(*header));
+
+    // TODO: These two get calls (and thus double bounds check) can be replaced with
+    // `split_at_checked` when stabilized: https://github.com/rust-lang/rust/issues/119128
+    let datagram_data = tail.get(..datagram_len)?;
+    let tail = tail.get(datagram_len..)?;
+
+    Some((datagram_data, tail))
 }
 
 /// Reads datagrams from `udp_in` and writes them (with the 16 bit header containing the length)
