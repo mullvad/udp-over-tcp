@@ -2,6 +2,7 @@
 //! to UDP.
 
 use crate::logging::Redact;
+use core::cmp::min;
 use err_context::{BoxedErrorExt as _, ErrorExt as _, ResultExt as _};
 use std::convert::Infallible;
 use std::fmt;
@@ -9,6 +10,7 @@ use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
+use tokio::time::{sleep, Duration as tokio_Duration};
 
 #[derive(Debug)]
 #[cfg_attr(feature = "clap", derive(clap::Parser))]
@@ -142,6 +144,30 @@ fn create_listening_socket(
     Ok(tcp_listener)
 }
 
+struct Cooldown<const N: usize> {
+    index: usize,
+    delays: [u64; N],
+}
+
+impl<const N: usize> Cooldown<N> {
+    pub fn new(start: u64) -> Cooldown<N> {
+        Cooldown::<N> {
+            index: 0,
+            delays: core::array::from_fn(|i| start * (1 << i)),
+        }
+    }
+
+    pub fn rewind(&mut self) {
+        self.index = 0
+    }
+
+    pub fn step(&mut self) -> u64 {
+        let delay = self.delays[self.index];
+        self.index = min(self.index + 1, self.delays.len() - 1);
+        delay
+    }
+}
+
 async fn process_tcp_listener(
     tcp_listener: TcpListener,
     udp_bind_ip: IpAddr,
@@ -149,9 +175,11 @@ async fn process_tcp_listener(
     tcp_recv_timeout: Option<Duration>,
     tcp_nodelay: bool,
 ) -> ! {
+    let mut cooldown = Cooldown::<5>::new(1000);
     loop {
         match tcp_listener.accept().await {
             Ok((tcp_stream, tcp_peer_addr)) => {
+                cooldown.rewind();
                 log::debug!("Incoming connection from {}/TCP", Redact(tcp_peer_addr));
                 if let Err(error) = crate::tcp_options::set_nodelay(&tcp_stream, tcp_nodelay) {
                     log::error!("Error: {}", error.display("\nCaused by: "));
@@ -170,7 +198,10 @@ async fn process_tcp_listener(
                     }
                 });
             }
-            Err(error) => log::error!("Error when accepting incoming TCP connection: {}", error),
+            Err(error) => {
+                log::error!("Error when accepting incoming TCP connection: {}", error);
+                sleep(tokio_Duration::from_millis(cooldown.step())).await;
+            }
         }
     }
 }
