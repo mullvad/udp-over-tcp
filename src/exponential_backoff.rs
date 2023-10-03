@@ -35,3 +35,29 @@ impl ExponentialBackoff {
         delay
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn correct_delays() {
+        let mut backoff =
+            ExponentialBackoff::new(Duration::from_millis(60), Duration::from_millis(300));
+        assert_eq!(backoff.next_delay(), Duration::from_millis(60));
+        assert_eq!(backoff.next_delay(), Duration::from_millis(120));
+        assert_eq!(backoff.next_delay(), Duration::from_millis(240));
+        assert_eq!(backoff.next_delay(), Duration::from_millis(300));
+        assert_eq!(backoff.next_delay(), Duration::from_millis(300));
+    }
+
+    #[test]
+    fn reset() {
+        let mut backoff =
+            ExponentialBackoff::new(Duration::from_millis(60), Duration::from_millis(300));
+        assert_eq!(backoff.next_delay(), Duration::from_millis(60));
+        backoff.reset();
+        assert_eq!(backoff.next_delay(), Duration::from_millis(60));
+        assert_eq!(backoff.next_delay(), Duration::from_millis(120));
+    }
+}
