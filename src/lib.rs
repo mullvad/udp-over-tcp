@@ -86,6 +86,7 @@ pub mod udp2tcp;
 
 pub use udp2tcp::Udp2Tcp;
 
+mod exponential_backoff;
 mod forward_traffic;
 mod logging;
 mod tcp_options;

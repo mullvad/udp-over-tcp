@@ -22,6 +22,9 @@ Line wrap the file at 100 chars.                                              Th
 
 
 ## [Unreleased]
+### Changed
+- Use cool down period if TCP accept fails. This avoids excessive CPU usage e.g. when there are no
+  free file descriptors available to be allocated.
 
 
 ## [0.3.0] - 2023-02-28
