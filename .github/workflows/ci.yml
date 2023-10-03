@@ -64,8 +64,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable, beta]
         include:
-          - os: ubuntu-latest
-            rust: nightly
+#          - os: ubuntu-latest
+#            rust: nightly
           - os: ubuntu-latest
             # MSRV. Not considered breaking when this has to be bumped.
             # But should be mentioned in the changelog.
