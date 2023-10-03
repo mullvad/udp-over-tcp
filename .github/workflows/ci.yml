@@ -68,8 +68,7 @@ jobs:
             rust: nightly
           - os: ubuntu-latest
             # MSRV. Not considered breaking when this has to be bumped.
-            # But should be mentioned in the changelog.
-            rust: 1.64.0
+            rust: 1.70.0
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
