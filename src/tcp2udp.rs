@@ -1,6 +1,7 @@
 //! Primitives for listening on TCP and forwarding the data in incoming connections
 //! to UDP.
 
+use crate::exponential_backoff::ExponentialBackoff;
 use crate::logging::Redact;
 use err_context::{BoxedErrorExt as _, ErrorExt as _, ResultExt as _};
 use std::convert::Infallible;
@@ -9,6 +10,7 @@ use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
+use tokio::time::sleep;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "clap", derive(clap::Parser))]
@@ -149,6 +151,8 @@ async fn process_tcp_listener(
     tcp_recv_timeout: Option<Duration>,
     tcp_nodelay: bool,
 ) -> ! {
+    let mut cooldown =
+        ExponentialBackoff::new(Duration::from_millis(50), Duration::from_millis(5000));
     loop {
         match tcp_listener.accept().await {
             Ok((tcp_stream, tcp_peer_addr)) => {
@@ -169,8 +173,17 @@ async fn process_tcp_listener(
                         log::error!("Error: {}", error.display("\nCaused by: "));
                     }
                 });
+                cooldown.reset();
             }
-            Err(error) => log::error!("Error when accepting incoming TCP connection: {}", error),
+            Err(error) => {
+                log::error!("Error when accepting incoming TCP connection: {}", error);
+
+                // If the process runs out of file descriptors, it will fail to accept a socket.
+                // But that socket will also remain in the queue, so it will fail again immediately.
+                // This will busy loop consuming the CPU and filling any logs. To prevent this,
+                // delay between failed socket accept operations.
+                sleep(cooldown.next_delay()).await;
+            }
         }
     }
 }
