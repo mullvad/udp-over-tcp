@@ -2,8 +2,6 @@
 use nix::sys::socket::{getsockopt, setsockopt, sockopt};
 use std::fmt;
 use std::io;
-#[cfg(target_os = "linux")]
-use std::os::unix::io::AsRawFd;
 use std::time::Duration;
 use tokio::net::{TcpSocket, TcpStream};
 
@@ -111,13 +109,12 @@ pub fn apply(socket: &TcpSocket, options: &TcpOptions) -> Result<(), ApplyTcpOpt
     );
     #[cfg(target_os = "linux")]
     {
-        let fd = socket.as_raw_fd();
         if let Some(fwmark) = options.fwmark {
-            setsockopt(fd, sockopt::Mark, &fwmark).map_err(ApplyTcpOptionsError::Mark)?;
+            setsockopt(&socket, sockopt::Mark, &fwmark).map_err(ApplyTcpOptionsError::Mark)?;
         }
         log::debug!(
             "SO_MARK: {}",
-            getsockopt(fd, sockopt::Mark).map_err(ApplyTcpOptionsError::Mark)?
+            getsockopt(&socket, sockopt::Mark).map_err(ApplyTcpOptionsError::Mark)?
         );
     }
     Ok(())
