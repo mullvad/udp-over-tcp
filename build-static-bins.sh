@@ -4,7 +4,7 @@
 # and with logging enabled (controlled by RUST_LOG env var)
 #
 # You need the static version of glibc installed for this to work.
-# On Fedora/RHEL that's: glibc-static.
+# On Fedora/RHEL that's: sudo dnf install -y rust cargo glibc-static
 # On Debian/Ubuntu that's: libc6-dev.
 
 RUSTFLAGS="-C target-feature=+crt-static" \
