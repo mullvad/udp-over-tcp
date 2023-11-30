@@ -20,6 +20,11 @@ pub struct Options {
 
     #[clap(flatten)]
     tcp2udp_options: tcp2udp::Options,
+
+    #[cfg(feature = "statsd")]
+    /// Host to send statsd metrics to.
+    #[clap(long)]
+    statsd_host: Option<std::net::SocketAddr>,
 }
 
 fn main() {
@@ -28,10 +33,15 @@ fn main() {
 
     let options = Options::parse();
 
+    #[cfg(feature = "statsd")]
+    let statsd_host = options.statsd_host;
+    #[cfg(not(feature = "statsd"))]
+    let statsd_host = None;
+
     let runtime = create_runtime(options.threads);
 
     let error = runtime
-        .block_on(tcp2udp::run(options.tcp2udp_options))
+        .block_on(tcp2udp::run(options.tcp2udp_options, statsd_host))
         .into_error();
     log::error!("Error: {}", error.display("\nCaused by: "));
     std::process::exit(1);
