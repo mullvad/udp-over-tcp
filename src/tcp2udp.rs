@@ -8,9 +8,13 @@ use std::convert::Infallible;
 use std::fmt;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 use tokio::time::sleep;
+
+#[path = "statsd.rs"]
+mod statsd;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "clap", derive(clap::Parser))]
@@ -31,6 +35,11 @@ pub struct Options {
 
     #[cfg_attr(feature = "clap", clap(flatten))]
     pub tcp_options: crate::tcp_options::TcpOptions,
+
+    #[cfg(feature = "statsd")]
+    /// Host to send statsd metrics to.
+    #[cfg_attr(feature = "clap", clap(long))]
+    statsd_host: Option<SocketAddr>,
 }
 
 /// Error returned from [`run`] if something goes wrong.
@@ -47,6 +56,9 @@ pub enum Tcp2UdpError {
     BindTcpSocket(io::Error, SocketAddr),
     /// Failed to start listening on TCP socket
     ListenTcpSocket(io::Error, SocketAddr),
+    #[cfg(feature = "statsd")]
+    /// Failed to initialize statsd client
+    CreateStatsdClient(statsd::Error),
 }
 
 impl fmt::Display for Tcp2UdpError {
@@ -63,6 +75,8 @@ impl fmt::Display for Tcp2UdpError {
                 "Failed to start listening on TCP socket bound to {}",
                 addr
             ),
+            #[cfg(feature = "statsd")]
+            CreateStatsdClient(_) => "Failed to init metrics client".fmt(f),
         }
     }
 }
@@ -77,6 +91,8 @@ impl std::error::Error for Tcp2UdpError {
             SetReuseAddr(e) => Some(e),
             BindTcpSocket(e, _) => Some(e),
             ListenTcpSocket(e, _) => Some(e),
+            #[cfg(feature = "statsd")]
+            CreateStatsdClient(e) => Some(e),
         }
     }
 }
@@ -98,6 +114,16 @@ pub async fn run(options: Options) -> Result<Infallible, Tcp2UdpError> {
         }
     });
 
+    #[cfg(not(feature = "statsd"))]
+    let statsd = Arc::new(statsd::StatsdMetrics::dummy());
+    #[cfg(feature = "statsd")]
+    let statsd = Arc::new(match options.statsd_host {
+        None => statsd::StatsdMetrics::dummy(),
+        Some(statsd_host) => {
+            statsd::StatsdMetrics::real(statsd_host).map_err(Tcp2UdpError::CreateStatsdClient)?
+        }
+    });
+
     let mut join_handles = Vec::with_capacity(options.tcp_listen_addrs.len());
     for tcp_listen_addr in options.tcp_listen_addrs {
         let tcp_listener = create_listening_socket(tcp_listen_addr, &options.tcp_options)?;
@@ -106,6 +132,7 @@ pub async fn run(options: Options) -> Result<Infallible, Tcp2UdpError> {
         let udp_forward_addr = options.udp_forward_addr;
         let tcp_recv_timeout = options.tcp_options.recv_timeout;
         let tcp_nodelay = options.tcp_options.nodelay;
+        let statsd = Arc::clone(&statsd);
         join_handles.push(tokio::spawn(async move {
             process_tcp_listener(
                 tcp_listener,
@@ -113,6 +140,7 @@ pub async fn run(options: Options) -> Result<Infallible, Tcp2UdpError> {
                 udp_forward_addr,
                 tcp_recv_timeout,
                 tcp_nodelay,
+                statsd,
             )
             .await;
         }));
@@ -150,6 +178,7 @@ async fn process_tcp_listener(
     udp_forward_addr: SocketAddr,
     tcp_recv_timeout: Option<Duration>,
     tcp_nodelay: bool,
+    statsd: Arc<statsd::StatsdMetrics>,
 ) -> ! {
     let mut cooldown =
         ExponentialBackoff::new(Duration::from_millis(50), Duration::from_millis(5000));
@@ -160,7 +189,9 @@ async fn process_tcp_listener(
                 if let Err(error) = crate::tcp_options::set_nodelay(&tcp_stream, tcp_nodelay) {
                     log::error!("Error: {}", error.display("\nCaused by: "));
                 }
+                let statsd = statsd.clone();
                 tokio::spawn(async move {
+                    statsd.incr_connections();
                     if let Err(error) = process_socket(
                         tcp_stream,
                         tcp_peer_addr,
@@ -172,11 +203,14 @@ async fn process_tcp_listener(
                     {
                         log::error!("Error: {}", error.display("\nCaused by: "));
                     }
+                    statsd.decr_connections();
                 });
                 cooldown.reset();
             }
             Err(error) => {
                 log::error!("Error when accepting incoming TCP connection: {}", error);
+
+                statsd.accept_error();
 
                 // If the process runs out of file descriptors, it will fail to accept a socket.
                 // But that socket will also remain in the queue, so it will fail again immediately.
