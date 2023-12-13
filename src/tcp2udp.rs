@@ -35,6 +35,11 @@ pub struct Options {
 
     #[cfg_attr(feature = "clap", clap(flatten))]
     pub tcp_options: crate::tcp_options::TcpOptions,
+
+    #[cfg(feature = "statsd")]
+    /// Host to send statsd metrics to.
+    #[cfg_attr(feature = "clap", clap(long))]
+    statsd_host: Option<SocketAddr>,
 }
 
 /// Error returned from [`run`] if something goes wrong.
@@ -96,14 +101,7 @@ impl std::error::Error for Tcp2UdpError {
 /// If binding a listening socket fails this returns an error. Otherwise the function
 /// will continue indefinitely to accept incoming connections and forward to UDP.
 /// Errors are just logged.
-///
-/// If the `statsd` feature is enabled, and a socket address is passed in `statsd_host`,
-/// metrics will be sent to it. If this argument is not `None` but the feature is disabled,
-/// it will just be ignored.
-pub async fn run(
-    options: Options,
-    statsd_host: Option<SocketAddr>,
-) -> Result<Infallible, Tcp2UdpError> {
+pub async fn run(options: Options) -> Result<Infallible, Tcp2UdpError> {
     if options.tcp_listen_addrs.is_empty() {
         return Err(Tcp2UdpError::NoTcpListenAddrs);
     }
@@ -116,16 +114,13 @@ pub async fn run(
         }
     });
 
-    let statsd = Arc::new(match statsd_host {
+    #[cfg(not(feature = "statsd"))]
+    let statsd = Arc::new(statsd::StatsdMetrics::dummy());
+    #[cfg(feature = "statsd")]
+    let statsd = Arc::new(match options.statsd_host {
         None => statsd::StatsdMetrics::dummy(),
-        #[cfg(feature = "statsd")]
         Some(statsd_host) => {
             statsd::StatsdMetrics::real(statsd_host).map_err(Tcp2UdpError::CreateStatsdClient)?
-        }
-        #[cfg(not(feature = "statsd"))]
-        Some(_) => {
-            log::warn!("Compiled without statsd support, ignoring statsd argument");
-            statsd::StatsdMetrics::dummy()
         }
     });
 
