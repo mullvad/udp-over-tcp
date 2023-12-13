@@ -51,6 +51,7 @@ pub enum Tcp2UdpError {
     BindTcpSocket(io::Error, SocketAddr),
     /// Failed to start listening on TCP socket
     ListenTcpSocket(io::Error, SocketAddr),
+    #[cfg(feature = "statsd")]
     /// Failed to initialize statsd client
     CreateStatsdClient(statsd::Error),
 }
@@ -69,6 +70,7 @@ impl fmt::Display for Tcp2UdpError {
                 "Failed to start listening on TCP socket bound to {}",
                 addr
             ),
+            #[cfg(feature = "statsd")]
             CreateStatsdClient(_) => "Failed to init metrics client".fmt(f),
         }
     }
@@ -84,6 +86,7 @@ impl std::error::Error for Tcp2UdpError {
             SetReuseAddr(e) => Some(e),
             BindTcpSocket(e, _) => Some(e),
             ListenTcpSocket(e, _) => Some(e),
+            #[cfg(feature = "statsd")]
             CreateStatsdClient(e) => Some(e),
         }
     }

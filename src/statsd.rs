@@ -2,26 +2,29 @@
 use cadence::{CountedExt, Gauged, QueuingMetricSink, StatsdClient, UdpMetricSink};
 #[cfg(feature = "statsd")]
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::{fmt, io};
 
+#[cfg(feature = "statsd")]
 /// Queue with a maximum capacity of 8K events.
 /// This program is extremely unlikely to ever reach that upper bound.
 /// The bound is still here so that if it ever were to happen, we drop events
 /// instead of indefinitely filling the memory with unsent events.
 const QUEUE_SIZE: usize = 8 * 1024;
 
+#[cfg(feature = "statsd")]
 const PREFIX: &str = "tcp2udp";
 
+#[cfg(feature = "statsd")]
 #[derive(Debug)]
 pub enum Error {
     /// Failed to create + bind the statsd UDP socket.
-    BindUdpSocket(io::Error),
+    BindUdpSocket(std::io::Error),
     /// Failed to create statsd client.
     CreateStatsdClient(cadence::MetricError),
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+#[cfg(feature = "statsd")]
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Error::*;
         match self {
             BindUdpSocket(_) => "Failed to bind the UDP socket".fmt(f),
@@ -30,6 +33,7 @@ impl fmt::Display for Error {
     }
 }
 
+#[cfg(feature = "statsd")]
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         use Error::*;
