@@ -128,7 +128,7 @@ mod real {
         }
 
         pub fn incr_connections(&self) {
-            let num_connections = self.num_connections.fetch_add(1, Ordering::SeqCst) + 1;
+            let num_connections = self.num_connections.fetch_add(1, Ordering::Relaxed) + 1;
             log::debug!("Sending statsd num_connections = {num_connections}");
             if let Err(e) = self.client.gauge("num_connections", num_connections) {
                 log::error!("Failed to emit statsd num_connections: {e}");
@@ -136,7 +136,7 @@ mod real {
         }
 
         pub fn decr_connections(&self) {
-            let num_connections = self.num_connections.fetch_sub(1, Ordering::SeqCst) - 1;
+            let num_connections = self.num_connections.fetch_sub(1, Ordering::Relaxed) - 1;
             log::debug!("Sending statsd num_connections = {num_connections}");
             if let Err(e) = self.client.gauge("num_connections", num_connections) {
                 log::error!("Failed to emit statsd num_connections: {e}");
