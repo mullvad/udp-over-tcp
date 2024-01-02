@@ -39,7 +39,7 @@ pub struct Options {
     #[cfg(feature = "statsd")]
     /// Host to send statsd metrics to.
     #[cfg_attr(feature = "clap", clap(long))]
-    statsd_host: Option<SocketAddr>,
+    pub statsd_host: Option<SocketAddr>,
 }
 
 /// Error returned from [`run`] if something goes wrong.
