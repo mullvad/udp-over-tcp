@@ -22,6 +22,9 @@ Line wrap the file at 100 chars.                                              Th
 
 
 ## [Unreleased]
+### Changed
+- Add (optional) statsd metrics reporting support to `tcp2udp` binary and library module when the
+  `statsd` cargo feature is enabled.
 
 
 ## [0.3.1] - 2023-10-25
