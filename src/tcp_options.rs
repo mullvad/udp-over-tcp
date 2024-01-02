@@ -8,6 +8,7 @@ use tokio::net::{TcpSocket, TcpStream};
 /// Options to apply to the TCP socket involved in the tunneling.
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "clap", derive(clap::Parser))]
+#[non_exhaustive]
 pub struct TcpOptions {
     /// If given, sets the SO_RCVBUF option on the TCP socket to the given number of bytes.
     /// Changes the size of the operating system's receive buffer associated with the socket.
@@ -35,6 +36,7 @@ pub struct TcpOptions {
 }
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum ApplyTcpOptionsError {
     /// Failed to get/set TCP_RCVBUF
     RecvBuffer(io::Error),

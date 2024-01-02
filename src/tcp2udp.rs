@@ -16,9 +16,15 @@ use tokio::time::sleep;
 #[path = "statsd.rs"]
 mod statsd;
 
-#[derive(Debug)]
+/// Settings for a tcp2udp session. This is the argument to [`run`] to
+/// describe how the forwarding from TCP -> UDP should be set up.
+///
+/// This struct is `non_exhaustive` in order to allow adding more optional fields without
+/// being considered breaking changes. So you need to create an instance via [`Options::new`].
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "clap", derive(clap::Parser))]
 #[cfg_attr(feature = "clap", group(skip))]
+#[non_exhaustive]
 pub struct Options {
     /// The IP and TCP port(s) to listen to for incoming traffic from udp2tcp.
     /// Supports binding multiple TCP sockets.
@@ -39,11 +45,44 @@ pub struct Options {
     #[cfg(feature = "statsd")]
     /// Host to send statsd metrics to.
     #[cfg_attr(feature = "clap", clap(long))]
-    statsd_host: Option<SocketAddr>,
+    pub statsd_host: Option<SocketAddr>,
+}
+
+impl Options {
+    /// Creates a new [`Options`] with all mandatory fields set to the passed arguments.
+    /// All optional values are set to their default values. They can later be set, since
+    /// they are public.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::net::{IpAddr, Ipv4Addr, SocketAddrV4, SocketAddr};
+    ///
+    /// let mut options = udp_over_tcp::tcp2udp::Options::new(
+    ///     // Listen on 127.0.0.1:1234/TCP
+    ///     vec![SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1234))],
+    ///     // Forward to 192.0.2.15:5001/UDP
+    ///     SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(192, 0, 2, 15), 5001)),
+    /// );
+    ///
+    /// // Bind the local UDP socket (used to send to 192.0.2.15:5001/UDP) to the loopback interface
+    /// options.udp_bind_ip = Some(IpAddr::V4(Ipv4Addr::LOCALHOST));
+    /// ```
+    pub fn new(tcp_listen_addrs: Vec<SocketAddr>, udp_forward_addr: SocketAddr) -> Self {
+        Options {
+            tcp_listen_addrs,
+            udp_forward_addr,
+            udp_bind_ip: None,
+            tcp_options: Default::default(),
+            #[cfg(feature = "statsd")]
+            statsd_host: None,
+        }
+    }
 }
 
 /// Error returned from [`run`] if something goes wrong.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Tcp2UdpError {
     /// No TCP listen addresses given in the `Options`.
     NoTcpListenAddrs,
