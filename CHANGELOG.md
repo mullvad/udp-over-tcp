@@ -22,9 +22,14 @@ Line wrap the file at 100 chars.                                              Th
 
 
 ## [Unreleased]
+
+
+## [0.4.0] - 2024-01-02
 ### Changed
 - Add (optional) statsd metrics reporting support to `tcp2udp` binary and library module when the
   `statsd` cargo feature is enabled.
+- Breaking: Make options structs and error enums `#[non_exhaustive]` in order to allow adding more
+  fields to them later without being breaking changes then.
 
 
 ## [0.3.1] - 2023-10-25
