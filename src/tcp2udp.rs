@@ -44,6 +44,7 @@ pub struct Options {
 
 /// Error returned from [`run`] if something goes wrong.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Tcp2UdpError {
     /// No TCP listen addresses given in the `Options`.
     NoTcpListenAddrs,

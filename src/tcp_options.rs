@@ -35,6 +35,7 @@ pub struct TcpOptions {
 }
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum ApplyTcpOptionsError {
     /// Failed to get/set TCP_RCVBUF
     RecvBuffer(io::Error),

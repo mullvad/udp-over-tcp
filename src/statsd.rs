@@ -63,6 +63,7 @@ mod real {
     const PREFIX: &str = "tcp2udp";
 
     #[derive(Debug)]
+    #[non_exhaustive]
     pub enum Error {
         /// Failed to create + bind the statsd UDP socket.
         BindUdpSocket(std::io::Error),

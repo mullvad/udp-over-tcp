@@ -11,6 +11,7 @@ use tokio::net::{TcpSocket, UdpSocket};
 use std::os::unix::io::{AsRawFd, RawFd};
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Failed to create the TCP socket.
     CreateTcpSocket(io::Error),
