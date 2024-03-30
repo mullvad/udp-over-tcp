@@ -4,6 +4,9 @@
 [cargo-vet]
 version = "0.9"
 
+[imports.mozilla]
+url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
+
 [[exemptions.addr2line]]
 version = "0.21.0"
 criteria = "safe-to-deploy"
