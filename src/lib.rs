@@ -91,7 +91,7 @@ mod forward_traffic;
 mod logging;
 mod tcp_options;
 
-pub use tcp_options::{ApplyTcpOptionsError, TcpOptions};
+pub use tcp_options::{ApplyTcpOptionsError, ApplyTcpOptionsErrorKind, TcpOptions};
 
 /// Helper trait for `Result<Infallible, E>` types. Allows getting the `E` value
 /// in a way that is guaranteed to not panic.
