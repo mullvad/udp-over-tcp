@@ -68,7 +68,8 @@ jobs:
             rust: nightly
           - os: ubuntu-latest
             # MSRV. Not considered breaking when this has to be bumped.
-            rust: 1.70.0
+            # But update `rust-version` in `Cargo.toml`
+            rust: 1.77.0
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
