@@ -103,10 +103,9 @@ async fn maybe_timeout<F: Future>(
 async fn forward_datagrams_in_buffer(udp_out: &UdpSocket, buffer: &[u8]) -> io::Result<usize> {
     let mut unprocessed_buffer = buffer;
     loop {
-        let (datagram_data, tail) = match split_first_datagram(unprocessed_buffer) {
-            Some(data_tuple) => data_tuple,
+        let Some((datagram_data, tail)) = split_first_datagram(unprocessed_buffer) else {
             // The buffer does not contain the entire datagram
-            None => break Ok(buffer.len() - unprocessed_buffer.len()),
+            break Ok(buffer.len() - unprocessed_buffer.len());
         };
 
         let udp_write_len = udp_out.send(datagram_data).await?;
