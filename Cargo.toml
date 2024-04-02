@@ -38,6 +38,8 @@ lazy_static = "1.4.0"
 # pulled in when built as a library.
 env_logger = { version = "0.11.3", optional = true }
 cadence = { version = "1.0.0", optional = true }
+thiserror = "1.0.58"
+strum = { version = "0.26.2", features = ["derive"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nix = { version = "0.27.1", features = ["socket"] }

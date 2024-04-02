@@ -1,6 +1,5 @@
 #[cfg(target_os = "linux")]
 use nix::sys::socket::{getsockopt, setsockopt, sockopt};
-use std::fmt;
 use std::io;
 use std::time::Duration;
 use tokio::net::{TcpSocket, TcpStream};
@@ -36,80 +35,37 @@ pub struct TcpOptions {
 }
 
 /// Represents a failure to apply socket options to the TCP socket.
-#[derive(Debug)]
-pub struct ApplyTcpOptionsError(ApplyTcpOptionsErrorInternal);
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+pub struct ApplyTcpOptionsError(#[from] ApplyTcpOptionsErrorInternal);
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error, strum::EnumDiscriminants)]
+#[strum_discriminants(vis(pub))]
+#[strum_discriminants(name(ApplyTcpOptionsErrorKind))]
+#[strum_discriminants(cfg_attr(all(), non_exhaustive))] // hacky way of bypassing strum limitations
 enum ApplyTcpOptionsErrorInternal {
-    RecvBuffer(io::Error),
-    SendBuffer(io::Error),
+    /// "Failed to get/set TCP_RCVBUF")]
+    #[error("Failed to get/set TCP_RCVBUF")]
+    RecvBuffer(#[source] io::Error),
+
+    /// "Failed to get/set TCP_SNDBUF")]
+    #[error("Failed to get/set TCP_SNDBUF")]
+    SendBuffer(#[source] io::Error),
+
+    /// "Failed to get/set SO_MARK")]
     #[cfg(target_os = "linux")]
-    Mark(nix::Error),
-    TcpNoDelay(io::Error),
-}
+    #[error("Failed to get/set SO_MARK")]
+    Mark(#[source] nix::Error),
 
-/// A list specifying what failed when applying the TCP options.
-#[derive(Debug, Copy, Clone)]
-#[non_exhaustive]
-pub enum ApplyTcpOptionsErrorKind {
-    /// Failed to get/set TCP_RCVBUF
-    RecvBuffer,
-
-    /// Failed to get/set TCP_SNDBUF
-    SendBuffer,
-
-    /// Failed to get/set SO_MARK
-    #[cfg(target_os = "linux")]
-    Mark,
-
-    /// Failed to get/set TCP_NODELAY
-    TcpNoDelay,
+    /// "Failed to get/set TCP_NODELAY")]
+    #[error("Failed to get/set TCP_NODELAY")]
+    TcpNoDelay(#[source] io::Error),
 }
 
 impl ApplyTcpOptionsError {
     /// Returns the kind of error that happened as an enum
     pub fn kind(&self) -> ApplyTcpOptionsErrorKind {
-        use ApplyTcpOptionsErrorInternal::*;
-        match self.0 {
-            RecvBuffer(_) => ApplyTcpOptionsErrorKind::RecvBuffer,
-            SendBuffer(_) => ApplyTcpOptionsErrorKind::SendBuffer,
-            #[cfg(target_os = "linux")]
-            Mark(_) => ApplyTcpOptionsErrorKind::Mark,
-            TcpNoDelay(_) => ApplyTcpOptionsErrorKind::TcpNoDelay,
-        }
-    }
-}
-
-impl From<ApplyTcpOptionsErrorInternal> for ApplyTcpOptionsError {
-    fn from(value: ApplyTcpOptionsErrorInternal) -> Self {
-        Self(value)
-    }
-}
-
-impl fmt::Display for ApplyTcpOptionsError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ApplyTcpOptionsErrorInternal::*;
-        match self.0 {
-            RecvBuffer(_) => "Failed to get/set TCP_RCVBUF",
-            SendBuffer(_) => "Failed to get/set TCP_SNDBUF",
-            #[cfg(target_os = "linux")]
-            Mark(_) => "Failed to get/set SO_MARK",
-            TcpNoDelay(_) => "Failed to get/set TCP_NODELAY",
-        }
-        .fmt(f)
-    }
-}
-
-impl std::error::Error for ApplyTcpOptionsError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use ApplyTcpOptionsErrorInternal::*;
-        match &self.0 {
-            RecvBuffer(e) => Some(e),
-            SendBuffer(e) => Some(e),
-            #[cfg(target_os = "linux")]
-            Mark(e) => Some(e),
-            TcpNoDelay(e) => Some(e),
-        }
+        ApplyTcpOptionsErrorKind::from(&self.0)
     }
 }
 
