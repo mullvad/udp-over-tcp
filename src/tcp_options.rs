@@ -35,27 +35,61 @@ pub struct TcpOptions {
     pub nodelay: bool,
 }
 
+/// Represents a failure to apply socket options to the TCP socket.
 #[derive(Debug)]
-#[non_exhaustive]
-pub enum ApplyTcpOptionsError {
-    /// Failed to get/set TCP_RCVBUF
+pub struct ApplyTcpOptionsError(ApplyTcpOptionsErrorInternal);
+
+#[derive(Debug)]
+enum ApplyTcpOptionsErrorInternal {
     RecvBuffer(io::Error),
+    SendBuffer(io::Error),
+    #[cfg(target_os = "linux")]
+    Mark(nix::Error),
+    TcpNoDelay(io::Error),
+}
+
+/// A list specifying what failed when applying the TCP options.
+#[derive(Debug, Copy, Clone)]
+#[non_exhaustive]
+pub enum ApplyTcpOptionsErrorKind {
+    /// Failed to get/set TCP_RCVBUF
+    RecvBuffer,
 
     /// Failed to get/set TCP_SNDBUF
-    SendBuffer(io::Error),
+    SendBuffer,
 
     /// Failed to get/set SO_MARK
     #[cfg(target_os = "linux")]
-    Mark(nix::Error),
+    Mark,
 
     /// Failed to get/set TCP_NODELAY
-    TcpNoDelay(io::Error),
+    TcpNoDelay,
+}
+
+impl ApplyTcpOptionsError {
+    /// Returns the kind of error that happened as an enum
+    pub fn kind(&self) -> ApplyTcpOptionsErrorKind {
+        use ApplyTcpOptionsErrorInternal::*;
+        match self.0 {
+            RecvBuffer(_) => ApplyTcpOptionsErrorKind::RecvBuffer,
+            SendBuffer(_) => ApplyTcpOptionsErrorKind::SendBuffer,
+            #[cfg(target_os = "linux")]
+            Mark(_) => ApplyTcpOptionsErrorKind::Mark,
+            TcpNoDelay(_) => ApplyTcpOptionsErrorKind::TcpNoDelay,
+        }
+    }
+}
+
+impl From<ApplyTcpOptionsErrorInternal> for ApplyTcpOptionsError {
+    fn from(value: ApplyTcpOptionsErrorInternal) -> Self {
+        Self(value)
+    }
 }
 
 impl fmt::Display for ApplyTcpOptionsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ApplyTcpOptionsError::*;
-        match self {
+        use ApplyTcpOptionsErrorInternal::*;
+        match self.0 {
             RecvBuffer(_) => "Failed to get/set TCP_RCVBUF",
             SendBuffer(_) => "Failed to get/set TCP_SNDBUF",
             #[cfg(target_os = "linux")]
@@ -68,8 +102,8 @@ impl fmt::Display for ApplyTcpOptionsError {
 
 impl std::error::Error for ApplyTcpOptionsError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use ApplyTcpOptionsError::*;
-        match self {
+        use ApplyTcpOptionsErrorInternal::*;
+        match &self.0 {
             RecvBuffer(e) => Some(e),
             SendBuffer(e) => Some(e),
             #[cfg(target_os = "linux")]
@@ -90,33 +124,34 @@ pub fn apply(socket: &TcpSocket, options: &TcpOptions) -> Result<(), ApplyTcpOpt
     if let Some(recv_buffer_size) = options.recv_buffer_size {
         socket
             .set_recv_buffer_size(recv_buffer_size)
-            .map_err(ApplyTcpOptionsError::RecvBuffer)?;
+            .map_err(ApplyTcpOptionsErrorInternal::RecvBuffer)?;
     }
     log::debug!(
         "SO_RCVBUF: {}",
         socket
             .recv_buffer_size()
-            .map_err(ApplyTcpOptionsError::RecvBuffer)?
+            .map_err(ApplyTcpOptionsErrorInternal::RecvBuffer)?
     );
     if let Some(send_buffer_size) = options.send_buffer_size {
         socket
             .set_send_buffer_size(send_buffer_size)
-            .map_err(ApplyTcpOptionsError::SendBuffer)?;
+            .map_err(ApplyTcpOptionsErrorInternal::SendBuffer)?;
     }
     log::debug!(
         "SO_SNDBUF: {}",
         socket
             .send_buffer_size()
-            .map_err(ApplyTcpOptionsError::SendBuffer)?
+            .map_err(ApplyTcpOptionsErrorInternal::SendBuffer)?
     );
     #[cfg(target_os = "linux")]
     {
         if let Some(fwmark) = options.fwmark {
-            setsockopt(&socket, sockopt::Mark, &fwmark).map_err(ApplyTcpOptionsError::Mark)?;
+            setsockopt(&socket, sockopt::Mark, &fwmark)
+                .map_err(ApplyTcpOptionsErrorInternal::Mark)?;
         }
         log::debug!(
             "SO_MARK: {}",
-            getsockopt(&socket, sockopt::Mark).map_err(ApplyTcpOptionsError::Mark)?
+            getsockopt(&socket, sockopt::Mark).map_err(ApplyTcpOptionsErrorInternal::Mark)?
         );
     }
     Ok(())
@@ -128,12 +163,12 @@ pub fn set_nodelay(tcp_stream: &TcpStream, nodelay: bool) -> Result<(), ApplyTcp
     // Configure TCP_NODELAY on the TCP stream
     tcp_stream
         .set_nodelay(nodelay)
-        .map_err(ApplyTcpOptionsError::TcpNoDelay)?;
+        .map_err(ApplyTcpOptionsErrorInternal::TcpNoDelay)?;
     log::debug!(
         "TCP_NODELAY: {}",
         tcp_stream
             .nodelay()
-            .map_err(ApplyTcpOptionsError::TcpNoDelay)?
+            .map_err(ApplyTcpOptionsErrorInternal::TcpNoDelay)?
     );
     Ok(())
 }
