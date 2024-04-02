@@ -115,7 +115,7 @@ async fn forward_datagrams_in_buffer(udp_out: &UdpSocket, buffer: &[u8]) -> io::
             datagram_data.len(),
             "Did not send entire UDP datagram"
         );
-        log::trace!("Forwarded {} byte TCP->UDP", datagram_data.len());
+        log::trace!("Forwarded {} bytes TCP->UDP", datagram_data.len());
 
         unprocessed_buffer = tail;
     }
