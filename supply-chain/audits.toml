@@ -1,4 +1,8 @@
 
 # cargo-vet audits file
 
-[audits]
+[[audits.windows-sys]]
+who = "Linus Färnstrand <linus@mullvad.net>"
+criteria = "safe-to-deploy"
+version = "0.48.0"
+notes = "This is just a test audit to explore cargo-vet. DO NOT TRUST THIS AUDIT"
