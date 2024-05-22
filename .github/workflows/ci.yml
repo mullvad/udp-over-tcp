@@ -1,4 +1,3 @@
-
 name: Build and test
 on:
   - push
@@ -56,7 +55,6 @@ jobs:
           use-tool-cache: true
       - name: Audit
         run: cargo audit --deny warnings
-
 
   build-and-test:
     strategy:
