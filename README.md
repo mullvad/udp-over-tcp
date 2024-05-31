@@ -1,5 +1,7 @@
 # udp-over-tcp
 
+## Introduction
+
 A library (and binaries) for tunneling UDP datagrams over a TCP stream.
 
 Some programs/protocols only work over UDP. And some networks only allow TCP. This is where
@@ -17,6 +19,35 @@ Some programs/protocols only work over UDP. And some networks only allow TCP. Th
   consumed as a Rust library as well.
   `tcp2udp` continues to accept new incoming TCP connections, and creates a new UDP socket
   for each. So a single `tcp2udp` server can be used to service many `udp2tcp` clients.
+
+## Building
+
+Ensure you have the required dependencies installed on:
+
+### Debian / Ubuntu
+
+Install Rust by following the guides for [Rustup]([url](https://www.rust-lang.org/tools/install))
+
+Install ibc6-dev with APT:
+
+```
+sudo apt install -y libc6-dev
+```
+
+### Fedora
+
+All dependencies can be installed as follows:
+
+```
+sudo dnf install -y cargo rust glibc-static 
+```
+
+Run the script `build-static-bins.sh` to produce the static binary files. These will be outputted to:
+
+```
+$ ls target/x86_64-unknown-linux-gnu/release/
+build  deps  examples  incremental  tcp2udp  tcp2udp.d  udp2tcp  udp2tcp.d
+```
 
 ## Protocol
 
