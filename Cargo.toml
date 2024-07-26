@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 description = "Tunnel UDP traffic inside a TCP stream. Each datagram is prefixed with a 16 bit unsigned integer containing the length"
 repository = "https://github.com/mullvad/udp-over-tcp"
 edition = "2021"
-rust-version = "1.77.0"
+rust-version = "1.80.0"
 publish = false
 
 [[bin]]

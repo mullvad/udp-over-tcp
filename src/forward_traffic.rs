@@ -127,12 +127,7 @@ fn split_first_datagram(buffer: &[u8]) -> Option<(&[u8], &[u8])> {
     let (header, tail) = buffer.split_first_chunk::<HEADER_LEN>()?;
     let datagram_len = usize::from(u16::from_be_bytes(*header));
 
-    // TODO: These two get calls (and thus double bounds check) can be replaced with
-    // `split_at_checked` when stabilized: https://github.com/rust-lang/rust/issues/119128
-    let datagram_data = tail.get(..datagram_len)?;
-    let tail = tail.get(datagram_len..)?;
-
-    Some((datagram_data, tail))
+    tail.split_at_checked(datagram_len)
 }
 
 /// Reads datagrams from `udp_in` and writes them (with the 16 bit header containing the length)
