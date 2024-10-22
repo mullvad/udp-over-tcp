@@ -21,7 +21,7 @@ use tokio::time::timeout;
 /// read operation would ever return. We are going to use that extra space
 /// to store our 2 byte udp-over-tcp header.
 pub const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
-const HEADER_LEN: usize = mem::size_of::<u16>();
+pub const HEADER_LEN: usize = mem::size_of::<u16>();
 
 /// Forward traffic between the given UDP and TCP sockets in both directions.
 /// This async function runs until one of the sockets are closed or there is an error.

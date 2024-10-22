@@ -93,6 +93,9 @@ mod tcp_options;
 
 pub use tcp_options::{ApplyTcpOptionsError, ApplyTcpOptionsErrorKind, TcpOptions};
 
+/// Size of the header (in bytes) that is prepended to each datagram in the TCP stream.
+pub use forward_traffic::HEADER_LEN;
+
 /// Helper trait for `Result<Infallible, E>` types. Allows getting the `E` value
 /// in a way that is guaranteed to not panic.
 pub trait NeverOkResult<E> {
