@@ -1,4 +1,3 @@
-use crate::NeverOkResult;
 use err_context::BoxedErrorExt as _;
 use err_context::ResultExt as _;
 use futures::future::select;
@@ -41,7 +40,7 @@ pub async fn process_udp_over_tcp(
         }
     };
     let udp2tcp = async move {
-        let error = process_udp2tcp(udp_in, tcp_out).await.into_error();
+        let Err(error) = process_udp2tcp(udp_in, tcp_out).await;
         log::error!("Error: {}", error.display("\nCaused by: "));
     };
 
