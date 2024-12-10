@@ -109,10 +109,9 @@ impl fmt::Display for Tcp2UdpError {
             ApplyTcpOptions(_) => "Failed to apply options to TCP socket".fmt(f),
             SetReuseAddr(_) => "Failed to set SO_REUSEADDR on TCP socket".fmt(f),
             BindTcpSocket(_, addr) => write!(f, "Failed to bind TCP socket to {addr}"),
-            ListenTcpSocket(_, addr) => write!(
-                f,
-                "Failed to start listening on TCP socket bound to {addr}"
-            ),
+            ListenTcpSocket(_, addr) => {
+                write!(f, "Failed to start listening on TCP socket bound to {addr}")
+            }
             #[cfg(feature = "statsd")]
             CreateStatsdClient(_) => "Failed to init metrics client".fmt(f),
         }
