@@ -3,6 +3,8 @@ use err_context::BoxedErrorExt as _;
 use err_context::ResultExt as _;
 use futures::future::select;
 use futures::pin_mut;
+use tokio::io::AsyncRead;
+use tokio::io::AsyncWrite;
 use std::convert::Infallible;
 use std::future::Future;
 use std::io;
@@ -55,7 +57,7 @@ pub async fn process_udp_over_tcp(
 /// Reads from `tcp_in` and extracts UDP datagrams. Writes the datagrams to `udp_out`.
 /// Returns if the TCP socket is closed, or an IO error happens on either socket.
 pub async fn process_tcp2udp(
-    mut tcp_in: TcpReadHalf,
+    mut tcp_in: impl AsyncRead + Unpin,
     udp_out: Arc<UdpSocket>,
     tcp_recv_timeout: Option<Duration>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -134,7 +136,7 @@ fn split_first_datagram(buffer: &[u8]) -> Option<(&[u8], &[u8])> {
 /// to `tcp_out` indefinitely, or until an IO error happens on either socket.
 pub async fn process_udp2tcp(
     udp_in: Arc<UdpSocket>,
-    mut tcp_out: TcpWriteHalf,
+    mut tcp_out: impl AsyncWrite + Unpin,
 ) -> Result<Infallible, Box<dyn std::error::Error>> {
     // A buffer large enough to hold any possible UDP datagram plus its 16 bit length header.
     let mut buffer = datagram_buffer();
