@@ -117,7 +117,7 @@ async fn forward_datagrams_in_buffer(udp_out: &UdpSocket, buffer: &[u8]) -> io::
             datagram_data.len(),
             "Did not send entire UDP datagram"
         );
-        log::trace!("Forwarded {} bytes TCP->UDP", datagram_data.len());
+        log::info!("Forwarded {} bytes TCP->UDP", datagram_data.len());
 
         unprocessed_buffer = tail;
     }
@@ -158,7 +158,7 @@ pub async fn process_udp2tcp(
             .await
             .context("Failed writing to TCP")?;
 
-        log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
+        log::info!("Forwarded {} bytes UDP->TCP", udp_read_len);
     }
 }
 
