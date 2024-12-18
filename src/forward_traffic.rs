@@ -70,6 +70,7 @@ pub async fn process_tcp2udp(
                 .await
                 .context("Timeout while reading from TCP")?
                 .context("Failed reading from TCP")?;
+        log::info!("TCP2UDP read {} bytes from TCP socket", tcp_read_len);
         if tcp_read_len == 0 {
             break;
         }
@@ -145,6 +146,7 @@ pub async fn process_udp2tcp(
             .recv(&mut buffer[HEADER_LEN..])
             .await
             .context("Failed reading from UDP")?;
+        log::info!("UDP2TCP read {} bytes from UDP socket", udp_read_len);
 
         // Set the "header" to the length of the datagram.
         let datagram_len =
