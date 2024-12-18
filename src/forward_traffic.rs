@@ -54,7 +54,7 @@ pub async fn process_udp_over_tcp(
 
 /// Reads from `tcp_in` and extracts UDP datagrams. Writes the datagrams to `udp_out`.
 /// Returns if the TCP socket is closed, or an IO error happens on either socket.
-async fn process_tcp2udp(
+pub async fn process_tcp2udp(
     mut tcp_in: TcpReadHalf,
     udp_out: Arc<UdpSocket>,
     tcp_recv_timeout: Option<Duration>,
@@ -132,7 +132,7 @@ fn split_first_datagram(buffer: &[u8]) -> Option<(&[u8], &[u8])> {
 
 /// Reads datagrams from `udp_in` and writes them (with the 16 bit header containing the length)
 /// to `tcp_out` indefinitely, or until an IO error happens on either socket.
-async fn process_udp2tcp(
+pub async fn process_udp2tcp(
     udp_in: Arc<UdpSocket>,
     mut tcp_out: TcpWriteHalf,
 ) -> Result<Infallible, Box<dyn std::error::Error>> {
