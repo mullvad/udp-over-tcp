@@ -4,7 +4,7 @@ use clap::Parser;
 use err_context::ErrorExt as _;
 use std::num::NonZeroU8;
 
-use udp_over_tcp::{tcp2udp, NeverOkResult};
+use udp_over_tcp::tcp2udp;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -30,9 +30,7 @@ fn main() {
 
     let runtime = create_runtime(options.threads);
 
-    let error = runtime
-        .block_on(tcp2udp::run(options.tcp2udp_options))
-        .into_error();
+    let Err(error) = runtime.block_on(tcp2udp::run(options.tcp2udp_options));
     log::error!("Error: {}", error.display("\nCaused by: "));
     std::process::exit(1);
 }
