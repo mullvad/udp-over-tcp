@@ -13,12 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          components: rustfmt
-          default: true
       - name: Check formatting
         run: cargo fmt -- --check
 
@@ -26,16 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          components: clippy
-          default: true
-      - name: Lint (clippy)
-        uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: cargo clippy -- -D warnings
     permissions:
       checks: write
 
@@ -44,17 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          default: true
-      - name: Install cargo-audit
-        uses: actions-rs/install@v0.1.2
-        with:
-          crate: cargo-audit
-          version: latest
-          use-tool-cache: true
+      - run: cargo install cargo-audit
       - name: Audit
         run: cargo audit --deny warnings
 
@@ -74,18 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
-          default: true
-
-      - name: Install cargo-all-features
-        uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-all-features
-          version: latest
-          use-tool-cache: true
+      - run: cargo install cargo-all-features
 
       - name: Build
         run: cargo build-all-features
