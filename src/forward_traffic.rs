@@ -1,7 +1,6 @@
-use err_context::BoxedErrorExt as _;
-use err_context::ResultExt as _;
 use futures::future::select;
 use futures::pin_mut;
+use snafu::prelude::*;
 use std::convert::Infallible;
 use std::future::Future;
 use std::io;
@@ -36,12 +35,12 @@ pub async fn process_udp_over_tcp(
 
     let tcp2udp = async move {
         if let Err(error) = process_tcp2udp(tcp_in, udp_out, tcp_recv_timeout).await {
-            log::error!("Error: {}", error.display("\nCaused by: "));
+            log::error!("Error: {error}");
         }
     };
     let udp2tcp = async move {
         let Err(error) = process_udp2tcp(udp_in, tcp_out).await;
-        log::error!("Error: {}", error.display("\nCaused by: "));
+        log::error!("Error: {error}");
     };
 
     pin_mut!(tcp2udp);
@@ -65,8 +64,8 @@ async fn process_tcp2udp(
         let tcp_read_len =
             maybe_timeout(tcp_recv_timeout, tcp_in.read(&mut buffer[unprocessed_i..]))
                 .await
-                .context("Timeout while reading from TCP")?
-                .context("Failed reading from TCP")?;
+                .context(TcpReadTimeoutSnafu)?
+                .context(TcpReadSnafu)?;
         if tcp_read_len == 0 {
             break;
         }
@@ -74,7 +73,7 @@ async fn process_tcp2udp(
 
         let processed_i = forward_datagrams_in_buffer(&udp_out, &buffer[..unprocessed_i])
             .await
-            .context("Failed writing to UDP")?;
+            .context(UdpWriteSnafu)?;
 
         // If we have read data that was not forwarded, because it was not a complete datagram,
         // move it to the start of the buffer and start over
@@ -85,6 +84,20 @@ async fn process_tcp2udp(
     }
     log::debug!("TCP socket closed");
     Ok(())
+}
+
+#[derive(Debug, snafu::Snafu)]
+enum ProcessSocketError {
+    #[snafu(display("Timeout while reading from TCP"))]
+    TcpReadTimeout { source: tokio::time::error::Elapsed },
+    #[snafu(display("Failed reading from TCP"))]
+    TcpRead { source: io::Error },
+    #[snafu(display("Failed writing to TCP"))]
+    TcpWrite { source: io::Error },
+    #[snafu(display("Failed reading from UDP"))]
+    UdpRead { source: io::Error },
+    #[snafu(display("Failed writing to UDP"))]
+    UdpWrite { source: io::Error },
 }
 
 async fn maybe_timeout<F: Future>(
@@ -141,7 +154,7 @@ async fn process_udp2tcp(
         let udp_read_len = udp_in
             .recv(&mut buffer[HEADER_LEN..])
             .await
-            .context("Failed reading from UDP")?;
+            .context(UdpReadSnafu)?;
 
         // Set the "header" to the length of the datagram.
         let datagram_len =
@@ -151,7 +164,7 @@ async fn process_udp2tcp(
         tcp_out
             .write_all(&buffer[..HEADER_LEN + udp_read_len])
             .await
-            .context("Failed writing to TCP")?;
+            .context(TcpWriteSnafu)?;
 
         log::trace!("Forwarded {} bytes UDP->TCP", udp_read_len);
     }

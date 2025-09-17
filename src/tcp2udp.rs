@@ -3,7 +3,7 @@
 
 use crate::exponential_backoff::ExponentialBackoff;
 use crate::logging::Redact;
-use err_context::{BoxedErrorExt as _, ErrorExt as _, ResultExt as _};
+use snafu::prelude::*;
 use std::convert::Infallible;
 use std::fmt;
 use std::io;
@@ -135,7 +135,6 @@ impl std::error::Error for Tcp2UdpError {
         }
     }
 }
-
 /// Sets up TCP listening sockets on all addresses in `Options::tcp_listen_addrs`.
 /// If binding a listening socket fails this returns an error. Otherwise the function
 /// will continue indefinitely to accept incoming connections and forward to UDP.
@@ -226,7 +225,7 @@ async fn process_tcp_listener(
             Ok((tcp_stream, tcp_peer_addr)) => {
                 log::debug!("Incoming connection from {}/TCP", Redact(tcp_peer_addr));
                 if let Err(error) = crate::tcp_options::set_nodelay(&tcp_stream, tcp_nodelay) {
-                    log::error!("Error: {}", error.display("\nCaused by: "));
+                    log::error!("Error: {error}");
                 }
                 let statsd = statsd.clone();
                 tokio::spawn(async move {
@@ -240,7 +239,7 @@ async fn process_tcp_listener(
                     )
                     .await
                     {
-                        log::error!("Error: {}", error.display("\nCaused by: "));
+                        log::error!("Error: {error}");
                     }
                     statsd.decr_connections();
                 });
@@ -260,7 +259,6 @@ async fn process_tcp_listener(
         }
     }
 }
-
 /// Sets up a UDP socket bound to `udp_bind_ip` and connected to `udp_peer_addr` and forwards
 /// traffic between that UDP socket and the given `tcp_stream` until the `tcp_stream` is closed.
 /// `tcp_peer_addr` should be the remote addr that `tcp_stream` is connected to.
@@ -271,15 +269,17 @@ async fn process_socket(
     udp_peer_addr: SocketAddr,
     tcp_recv_timeout: Option<Duration>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let udp_bind_addr = SocketAddr::new(udp_bind_ip, 0);
+    let bind_addr = SocketAddr::new(udp_bind_ip, 0);
 
-    let udp_socket = UdpSocket::bind(udp_bind_addr)
+    let udp_socket = UdpSocket::bind(bind_addr)
         .await
-        .with_context(|_| format!("Failed to bind UDP socket to {}", udp_bind_addr))?;
+        .context(UdpBindSnafu { bind_addr })?;
     udp_socket
         .connect(udp_peer_addr)
         .await
-        .with_context(|_| format!("Failed to connect UDP socket to {}", udp_peer_addr))?;
+        .context(UdpConnectSnafu {
+            addr: udp_peer_addr,
+        })?;
 
     log::debug!(
         "UDP socket bound to {} and connected to {}",
@@ -300,4 +300,15 @@ async fn process_socket(
     );
 
     Ok(())
+}
+
+#[derive(Debug, snafu::Snafu)]
+enum ProcessSocketError {
+    #[snafu(display("Failed to bind UDP socket to {bind_addr}"))]
+    UdpBind {
+        bind_addr: SocketAddr,
+        source: io::Error,
+    },
+    #[snafu(display("Failed to connect UDP socket to {addr}"))]
+    UdpConnect { addr: SocketAddr, source: io::Error },
 }

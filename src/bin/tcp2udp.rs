@@ -1,7 +1,6 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
-use err_context::ErrorExt as _;
 use std::num::NonZeroU8;
 
 use udp_over_tcp::tcp2udp;
@@ -31,7 +30,7 @@ fn main() {
     let runtime = create_runtime(options.threads);
 
     let Err(error) = runtime.block_on(tcp2udp::run(options.tcp2udp_options));
-    log::error!("Error: {}", error.display("\nCaused by: "));
+    log::error!("Error: {error}");
     std::process::exit(1);
 }
 
