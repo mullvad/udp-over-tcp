@@ -28,6 +28,9 @@ Line wrap the file at 100 chars.                                              Th
 - MSRV bumps to 1.85
 - Rust language edition upgraded to 2024.
 
+### Removed
+- Remove dependency `lazy_static`.
+
 
 ## [0.4.0] - 2024-01-02
 ### Changed
