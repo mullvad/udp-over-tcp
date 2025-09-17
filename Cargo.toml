@@ -32,7 +32,6 @@ err-context = "0.1.0"
 log = "0.4.11"
 futures = "0.3.31"
 clap = { version = "4.0", features = ["derive"], optional = true }
-lazy_static = "1.4.0"
 
 # Only used by the binaries in src/bin/ and is optional so it's not
 # pulled in when built as a library.
