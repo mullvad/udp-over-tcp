@@ -22,11 +22,18 @@ Line wrap the file at 100 chars.                                              Th
 
 
 ## [Unreleased]
+### Added
+- Add `snafu` as dependency. `snafu` provide macros for creating domain specific errors and adding
+  context to the underlying source errors.
+
 ### Changed
 - Change the public API of `ApplyTcpOptionsError`. So this is a breaking change. This stops
   exposing the internal details of the type which allows future changes to not be breaking.
 - MSRV bumps to 1.85
 - Rust language edition upgraded to 2024.
+
+### Removed
+- Remove the `err-context` dependency. Replaced by `snafu`.
 
 
 ## [0.4.0] - 2024-01-02
