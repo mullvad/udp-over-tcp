@@ -1,11 +1,12 @@
 use std::fmt;
+use std::sync::LazyLock;
 
-lazy_static::lazy_static! {
-    /// If true, redact IPs and other user sensitive data from logs
-    static ref REDACT_LOGS: bool = std::env::var("REDACT_LOGS")
+/// If true, redact IPs and other user sensitive data from logs
+static REDACT_LOGS: LazyLock<bool> = LazyLock::new(|| {
+    std::env::var("REDACT_LOGS")
         .map(|v| v != "0")
-        .unwrap_or(false);
-}
+        .unwrap_or(false)
+});
 
 /// Wrap any displayable type in this to have its Display/Debug format be redacted at runtime
 /// if the user so wish. Makes it possible to log more extensively without collecting user
