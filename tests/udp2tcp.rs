@@ -1,7 +1,7 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::task::JoinHandle;
-use udp_over_tcp::{udp2tcp, TcpOptions};
+use udp_over_tcp::{TcpOptions, udp2tcp};
 
 /// Set everything up and then close the TCP socket. That should cleanly make the Udp2Tcp
 /// instance shut down.
