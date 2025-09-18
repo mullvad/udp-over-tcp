@@ -1,7 +1,6 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
-use err_context::BoxedErrorExt as _;
 use std::net::SocketAddr;
 
 use udp_over_tcp::udp2tcp;
@@ -32,7 +31,7 @@ async fn main() {
 
     let options = Options::parse();
     if let Err(error) = run(options).await {
-        log::error!("Error: {}", error.display("\nCaused by: "));
+        log::error!("Error: {error}");
         std::process::exit(1);
     }
 }
