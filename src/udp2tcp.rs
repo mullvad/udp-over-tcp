@@ -5,7 +5,14 @@ use crate::logging::Redact;
 use std::fmt;
 use std::io;
 use std::net::SocketAddr;
+use tokio::net::TcpStream;
 use tokio::net::{TcpSocket, UdpSocket};
+
+use tokio_socks::{
+    tcp::Socks5Stream,
+    TargetAddr,
+    Error as SocksError,
+};
 
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
@@ -25,6 +32,8 @@ pub enum Error {
     ConnectUdp(io::Error),
     /// Failed to connect TCP socket to forward address.
     ConnectTcp(io::Error),
+    /// Failed to forward over SOCKS
+    ConnectSocks(SocksError)
 }
 
 impl fmt::Display for Error {
@@ -37,6 +46,7 @@ impl fmt::Display for Error {
             ReadUdp(_) => "Failed receiving the first UDP datagram".fmt(f),
             ConnectUdp(_) => "Failed to connect UDP socket to peer".fmt(f),
             ConnectTcp(_) => "Failed to connect to TCP forward address".fmt(f),
+            ConnectSocks(_) => "Failed to forward over SOCKS".fmt(f)
         }
     }
 }
@@ -51,6 +61,7 @@ impl std::error::Error for Error {
             ReadUdp(e) => Some(e),
             ConnectUdp(e) => Some(e),
             ConnectTcp(e) => Some(e),
+            ConnectSocks(e) => Some(e),
         }
     }
 }
@@ -60,7 +71,17 @@ pub struct Udp2Tcp {
     tcp_socket: TcpSocket,
     udp_socket: UdpSocket,
     tcp_forward_addr: SocketAddr,
+    socks_server_addr: Option<SocketAddr>,
     tcp_options: crate::TcpOptions,
+}
+
+async fn socks_connect_socket(sock: TcpStream, target: SocketAddr) -> Result<TcpStream, Error> {
+    log::info!("Connecting to {}/SOCKS", target);
+    let socks_tgt = TargetAddr::Ip(target);
+    let socks_sock = Socks5Stream::connect_with_socket(sock, socks_tgt).await.map_err(Error::ConnectSocks)?;
+    let raw_socks_stream = socks_sock.into_inner();
+    log::info!("Connected to {}/SOCKS", target);
+    return Ok(raw_socks_stream);
 }
 
 impl Udp2Tcp {
@@ -69,9 +90,16 @@ impl Udp2Tcp {
     pub async fn new(
         udp_listen_addr: SocketAddr,
         tcp_forward_addr: SocketAddr,
+        socks_server_addr: Option<SocketAddr>,
         tcp_options: crate::TcpOptions,
     ) -> Result<Self, Error> {
-        let tcp_socket = match &tcp_forward_addr {
+        //We'll connect to proxy when proxy is provided, directly to upstream otherwise
+        let upstream_addr: SocketAddr = match socks_server_addr {
+            Some(a) => a,
+            None => tcp_forward_addr
+        };
+
+        let tcp_socket = match &upstream_addr {
             SocketAddr::V4(..) => TcpSocket::new_v4(),
             SocketAddr::V6(..) => TcpSocket::new_v6(),
         }
@@ -91,6 +119,7 @@ impl Udp2Tcp {
             tcp_socket,
             udp_socket,
             tcp_forward_addr,
+            socks_server_addr,
             tcp_options,
         })
     }
@@ -121,16 +150,25 @@ impl Udp2Tcp {
             .map_err(Error::ReadUdp)?;
         log::info!("Incoming connection from {}/UDP", Redact(udp_peer_addr));
 
-        log::info!("Connecting to {}/TCP", self.tcp_forward_addr);
+        let upstream_addr: SocketAddr = match self.socks_server_addr {
+            Some(a) => a,
+            None => self.tcp_forward_addr
+        };
+
+        log::info!("Connecting to {}/TCP", upstream_addr);
         let tcp_stream = self
             .tcp_socket
-            .connect(self.tcp_forward_addr)
+            .connect(upstream_addr)
             .await
             .map_err(Error::ConnectTcp)?;
-        log::info!("Connected to {}/TCP", self.tcp_forward_addr);
-
+        log::info!("Connected to {}/TCP", upstream_addr);
         crate::tcp_options::set_nodelay(&tcp_stream, self.tcp_options.nodelay)
             .map_err(Error::ApplyTcpOptions)?;
+
+        let final_stream = match self.socks_server_addr {
+          None => tcp_stream,
+          Some(_) => {socks_connect_socket(tcp_stream, self.tcp_forward_addr).await?}
+        };
 
         // Connect the UDP socket to whoever sent the first datagram. This is where
         // all the returned traffic will be sent to.
@@ -141,7 +179,7 @@ impl Udp2Tcp {
 
         crate::forward_traffic::process_udp_over_tcp(
             self.udp_socket,
-            tcp_stream,
+            final_stream,
             self.tcp_options.recv_timeout,
         )
         .await;
