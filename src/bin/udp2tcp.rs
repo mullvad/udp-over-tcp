@@ -21,6 +21,10 @@ pub struct Options {
     #[arg(long = "tcp-forward")]
     pub tcp_forward_addr: SocketAddr,
 
+    /// The socks server to use for forwarding TCP traffic
+    #[arg(long = "socks-server", env = "MULLVAD_UDP_OVER_TCP_SOCKS_SERVER")]
+    pub socks_server_addr: Option<SocketAddr>,
+
     #[clap(flatten)]
     pub tcp_options: udp_over_tcp::TcpOptions,
 }
@@ -41,6 +45,7 @@ async fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     let udp2tcp = udp2tcp::Udp2Tcp::new(
         options.udp_listen_addr,
         options.tcp_forward_addr,
+        options.socks_server_addr,
         options.tcp_options,
     )
     .await?;

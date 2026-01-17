@@ -123,6 +123,7 @@ async fn setup_udp2tcp() -> Result<
     let udp2tcp = udp2tcp::Udp2Tcp::new(
         "127.0.0.1:0".parse().unwrap(),
         tcp_listen_addr,
+        None,
         TcpOptions::default(),
     )
     .await?;
