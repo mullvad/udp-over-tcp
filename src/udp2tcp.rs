@@ -109,6 +109,13 @@ impl Udp2Tcp {
         self.tcp_socket.as_raw_fd()
     }
 
+    /// Returns the raw TCP socket that datagrams are forwarded to.
+    #[cfg(windows)]
+    pub fn remote_tcp_socket(&self) -> std::os::windows::io::RawSocket {
+        use std::os::windows::io::AsRawSocket;
+        self.tcp_socket.as_raw_socket()
+    }
+
     /// Connects to the TCP address and runs the forwarding until the TCP socket is closed, or
     /// an error occur.
     pub async fn run(self) -> Result<(), Error> {
