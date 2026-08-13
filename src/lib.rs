@@ -95,3 +95,5 @@ pub use tcp_options::{ApplyTcpOptionsError, ApplyTcpOptionsErrorKind, TcpOptions
 
 /// Size of the header (in bytes) that is prepended to each datagram in the TCP stream.
 pub use forward_traffic::HEADER_LEN;
+
+pub use forward_traffic::process_udp_over_tcp;

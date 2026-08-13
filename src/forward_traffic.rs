@@ -24,6 +24,7 @@ pub const HEADER_LEN: usize = mem::size_of::<u16>();
 
 /// Forward traffic between the given UDP and TCP sockets in both directions.
 /// This async function runs until one of the sockets are closed or there is an error.
+/// Both sockets must be connected to their respective peers.
 /// Both sockets are closed before returning.
 pub async fn process_udp_over_tcp(
     udp_socket: UdpSocket,
