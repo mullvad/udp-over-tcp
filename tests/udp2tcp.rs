@@ -1,7 +1,7 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::task::JoinHandle;
-use udp_over_tcp::{TcpOptions, udp2tcp};
+use udp_over_tcp::{HEADER_LEN, TcpOptions, udp2tcp};
 
 /// Set everything up and then close the TCP socket. That should cleanly make the Udp2Tcp
 /// instance shut down.
@@ -136,8 +136,10 @@ async fn setup_udp2tcp() -> Result<
     // Send empty datagram to connect TCP socket
     udp_socket.send(&[]).await?;
     let mut tcp_stream = tcp_listener.accept().await?.0;
-    let mut buf = [0; 1024];
-    tcp_stream.read(&mut buf).await?;
+    // Read out the empty datagram. It is just the length header, with no body.
+    let mut header = [0; HEADER_LEN];
+    tcp_stream.read_exact(&mut header).await?;
+    assert_eq!(header, [0, 0]);
 
     Ok((udp_socket, tcp_stream, join_handle))
 }
