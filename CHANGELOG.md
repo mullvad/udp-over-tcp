@@ -22,6 +22,10 @@ Line wrap the file at 100 chars.                                              Th
 
 
 ## [Unreleased]
+### Added
+- Expose `process_udp_over_tcp`. Allows forwarding traffic between a UDP and a TCP socket that the
+  caller set up themselves, instead of going through `Udp2Tcp`.
+
 ### Changed
 - Change the public API of `ApplyTcpOptionsError`. So this is a breaking change. This stops
   exposing the internal details of the type which allows future changes to not be breaking.
