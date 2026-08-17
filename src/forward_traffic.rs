@@ -6,7 +6,6 @@ use std::convert::Infallible;
 use std::future::Future;
 use std::io;
 use std::mem;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf as TcpReadHalf, OwnedWriteHalf as TcpWriteHalf};
@@ -22,25 +21,46 @@ use tokio::time::timeout;
 pub const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
 pub const HEADER_LEN: usize = mem::size_of::<u16>();
 
-/// Forward traffic between the given UDP and TCP sockets in both directions.
+/// A connected datagram transport.
+pub trait DatagramSocket {
+    /// Sends one datagram to the peer this socket is connected to. Returns the number of
+    /// bytes sent, which must be the length of the entire datagram.
+    fn send(&self, buf: &[u8]) -> impl Future<Output = io::Result<usize>> + Send;
+
+    /// Receives one datagram from the peer this socket is connected to, and returns its
+    /// length. Must never return more than [`MAX_DATAGRAM_SIZE`], since the length header
+    /// in the TCP stream is only 16 bits.
+    fn recv(&self, buf: &mut [u8]) -> impl Future<Output = io::Result<usize>> + Send;
+}
+
+impl DatagramSocket for UdpSocket {
+    fn send(&self, buf: &[u8]) -> impl Future<Output = io::Result<usize>> + Send {
+        UdpSocket::send(self, buf)
+    }
+
+    fn recv(&self, buf: &mut [u8]) -> impl Future<Output = io::Result<usize>> + Send {
+        UdpSocket::recv(self, buf)
+    }
+}
+
+/// Forward traffic between the given UDP socket and TCP socket in both directions.
 /// This async function runs until one of the sockets are closed or there is an error.
+/// Both sockets must be connected to their respective peers.
 /// Both sockets are closed before returning.
-pub async fn process_udp_over_tcp(
-    udp_socket: UdpSocket,
+pub async fn process_udp_over_tcp<S: DatagramSocket>(
+    udp_socket: S,
     tcp_stream: TcpStream,
     tcp_recv_timeout: Option<Duration>,
 ) {
-    let udp_in = Arc::new(udp_socket);
-    let udp_out = udp_in.clone();
     let (tcp_in, tcp_out) = tcp_stream.into_split();
 
-    let tcp2udp = async move {
-        if let Err(error) = process_tcp2udp(tcp_in, udp_out, tcp_recv_timeout).await {
+    let tcp2udp = async {
+        if let Err(error) = process_tcp2udp(tcp_in, &udp_socket, tcp_recv_timeout).await {
             log::error!("Error: {}", error.display("\nCaused by: "));
         }
     };
-    let udp2tcp = async move {
-        let Err(error) = process_udp2tcp(udp_in, tcp_out).await;
+    let udp2tcp = async {
+        let Err(error) = process_udp2tcp(&udp_socket, tcp_out).await;
         log::error!("Error: {}", error.display("\nCaused by: "));
     };
 
@@ -55,7 +75,7 @@ pub async fn process_udp_over_tcp(
 /// Returns if the TCP socket is closed, or an IO error happens on either socket.
 async fn process_tcp2udp(
     mut tcp_in: TcpReadHalf,
-    udp_out: Arc<UdpSocket>,
+    udp_out: &impl DatagramSocket,
     tcp_recv_timeout: Option<Duration>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = datagram_buffer();
@@ -72,7 +92,7 @@ async fn process_tcp2udp(
         }
         unprocessed_i += tcp_read_len;
 
-        let processed_i = forward_datagrams_in_buffer(&udp_out, &buffer[..unprocessed_i])
+        let processed_i = forward_datagrams_in_buffer(udp_out, &buffer[..unprocessed_i])
             .await
             .context("Failed writing to UDP")?;
 
@@ -99,7 +119,10 @@ async fn maybe_timeout<F: Future>(
 
 /// Forward all complete datagrams in `buffer` to `udp_out`.
 /// Returns the number of processed bytes.
-async fn forward_datagrams_in_buffer(udp_out: &UdpSocket, buffer: &[u8]) -> io::Result<usize> {
+async fn forward_datagrams_in_buffer(
+    udp_out: &impl DatagramSocket,
+    buffer: &[u8],
+) -> io::Result<usize> {
     let mut unprocessed_buffer = buffer;
     loop {
         let Some((datagram_data, tail)) = split_first_datagram(unprocessed_buffer) else {
@@ -132,7 +155,7 @@ fn split_first_datagram(buffer: &[u8]) -> Option<(&[u8], &[u8])> {
 /// Reads datagrams from `udp_in` and writes them (with the 16 bit header containing the length)
 /// to `tcp_out` indefinitely, or until an IO error happens on either socket.
 async fn process_udp2tcp(
-    udp_in: Arc<UdpSocket>,
+    udp_in: &impl DatagramSocket,
     mut tcp_out: TcpWriteHalf,
 ) -> Result<Infallible, Box<dyn std::error::Error>> {
     // A buffer large enough to hold any possible UDP datagram plus its 16 bit length header.
