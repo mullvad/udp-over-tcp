@@ -108,12 +108,10 @@ impl fmt::Display for Tcp2UdpError {
             CreateTcpSocket(_) => "Failed to create TCP socket".fmt(f),
             ApplyTcpOptions(_) => "Failed to apply options to TCP socket".fmt(f),
             SetReuseAddr(_) => "Failed to set SO_REUSEADDR on TCP socket".fmt(f),
-            BindTcpSocket(_, addr) => write!(f, "Failed to bind TCP socket to {}", addr),
-            ListenTcpSocket(_, addr) => write!(
-                f,
-                "Failed to start listening on TCP socket bound to {}",
-                addr
-            ),
+            BindTcpSocket(_, addr) => write!(f, "Failed to bind TCP socket to {addr}"),
+            ListenTcpSocket(_, addr) => {
+                write!(f, "Failed to start listening on TCP socket bound to {addr}")
+            }
             #[cfg(feature = "statsd")]
             CreateStatsdClient(_) => "Failed to init metrics client".fmt(f),
         }
@@ -275,11 +273,11 @@ async fn process_socket(
 
     let udp_socket = UdpSocket::bind(udp_bind_addr)
         .await
-        .with_context(|_| format!("Failed to bind UDP socket to {}", udp_bind_addr))?;
+        .with_context(|_| format!("Failed to bind UDP socket to {udp_bind_addr}"))?;
     udp_socket
         .connect(udp_peer_addr)
         .await
-        .with_context(|_| format!("Failed to connect UDP socket to {}", udp_peer_addr))?;
+        .with_context(|_| format!("Failed to connect UDP socket to {udp_peer_addr}"))?;
 
     log::debug!(
         "UDP socket bound to {} and connected to {}",
