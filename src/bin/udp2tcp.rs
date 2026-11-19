@@ -4,8 +4,6 @@ use clap::Parser;
 use err_context::BoxedErrorExt as _;
 use std::net::SocketAddr;
 
-use udp_over_tcp::udp2tcp;
-
 #[derive(Debug, Parser)]
 #[command(
     name = "udp2tcp",
@@ -22,7 +20,7 @@ pub struct Options {
     pub tcp_forward_addr: SocketAddr,
 
     #[clap(flatten)]
-    pub tcp_options: udp_over_tcp::TcpOptions,
+    pub tcp_options: udp2tcp::TcpOptions,
 }
 
 #[tokio::main]
