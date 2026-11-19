@@ -1,5 +1,5 @@
 //! Primitives for listening on TCP and forwarding the data in incoming connections
-//! to UDP.
+//! to UDP. Also referred to as `tcp2udp`.
 
 use crate::exponential_backoff::ExponentialBackoff;
 use crate::logging::Redact;
@@ -58,7 +58,7 @@ impl Options {
     /// ```
     /// # use std::net::{IpAddr, Ipv4Addr, SocketAddrV4, SocketAddr};
     ///
-    /// let mut options = udp_over_tcp::tcp2udp::Options::new(
+    /// let mut options = udp2tcp::decapsulate::Options::new(
     ///     // Listen on 127.0.0.1:1234/TCP
     ///     vec![SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1234))],
     ///     // Forward to 192.0.2.15:5001/UDP

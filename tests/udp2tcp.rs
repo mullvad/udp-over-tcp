@@ -1,7 +1,7 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::task::JoinHandle;
-use udp_over_tcp::{HEADER_LEN, TcpOptions, udp2tcp};
+use udp2tcp::{HEADER_LEN, TcpOptions, encapsulate};
 
 /// Set everything up and then close the TCP socket. That should cleanly make the Udp2Tcp
 /// instance shut down.
@@ -114,7 +114,11 @@ async fn pong_two_separate() -> Result<(), Box<dyn std::error::Error>> {
 /// Spawns a Udp2Tcp instance and connects to boths ends of it.
 /// Returns the UDP and TCP sockets that goes through it.
 async fn setup_udp2tcp() -> Result<
-    (UdpSocket, TcpStream, JoinHandle<Result<(), udp2tcp::Error>>),
+    (
+        UdpSocket,
+        TcpStream,
+        JoinHandle<Result<(), encapsulate::Error>>,
+    ),
     Box<dyn std::error::Error>,
 > {
     let tcp_listener = TcpListener::bind("127.0.0.1:0").await?;
