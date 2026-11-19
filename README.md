@@ -1,9 +1,9 @@
-# udp-over-tcp
+# udp2tcp
 
 A library (and binaries) for tunneling UDP datagrams over a TCP stream.
 
 Some programs/protocols only work over UDP. And some networks only allow TCP. This is where
-`udp-over-tcp` comes in handy. This library comes in two parts:
+`udp2tcp` comes in handy. This library comes in two parts:
 
 * `udp2tcp` - Forwards incoming UDP datagrams over a TCP stream. The return stream
   is translated back to datagrams and sent back out over UDP again.

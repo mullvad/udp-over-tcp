@@ -17,7 +17,7 @@ use tokio::time::timeout;
 /// The max value is 2^16 = 65536 bytes. But since that includes the
 /// UDP header, this constant is 8 bytes more than any UDP socket
 /// read operation would ever return. We are going to use that extra space
-/// to store our 2 byte udp-over-tcp header.
+/// to store our 2 byte udp2tcp header.
 pub const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
 pub const HEADER_LEN: usize = mem::size_of::<u16>();
 
