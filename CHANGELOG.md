@@ -29,6 +29,8 @@ Line wrap the file at 100 chars.                                              Th
   datagrams from any transport, and not just real UDP sockets, over the TCP stream.
 
 ### Changed
+- Rename `udp2tcp::udp2tcp` to `udp2tcp::encapsulate`.
+- Rename `udp2tcp::tcp2udp` to `udp2tcp::decapsulate`.
 - Change the public API of `ApplyTcpOptionsError`. So this is a breaking change. This stops
   exposing the internal details of the type which allows future changes to not be breaking.
 - MSRV bumps to 1.85

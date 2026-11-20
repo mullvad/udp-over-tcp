@@ -1,19 +1,19 @@
 //! A library (and binaries) for tunneling UDP datagrams over a TCP stream.
 //!
 //! Some programs/protocols only work over UDP. And some networks only allow TCP. This is where
-//! `udp-over-tcp` comes in handy. This library comes in two parts:
+//! `udp2tcp` comes in handy. This library comes in two parts:
 //!
-//! * `udp2tcp` - Forwards incoming UDP datagrams over a TCP stream. The return stream
+//! * `encapsulate` - Forwards incoming UDP datagrams over a TCP stream. The return stream
 //!   is translated back to datagrams and sent back out over UDP again.
 //!   This part can be easily used as both a library and a binary.
 //!   So it can be run standalone, but can also easily be included in other
 //!   Rust programs. The UDP socket is connected to the peer address of the first incoming
 //!   datagram. So one [`Udp2Tcp`] instance can handle traffic from a single peer only.
-//! * `tcp2udp` - Accepts connections over TCP and translates + forwards the incoming stream
+//! * `decapsulate` - Accepts connections over TCP and translates + forwards the incoming stream
 //!   as UDP datagrams to the destination specified during setup / on the command line.
 //!   Designed mostly to be a standalone executable to run on servers. But can be
 //!   consumed as a Rust library as well.
-//!   `tcp2udp` continues to accept new incoming TCP connections, and creates a new UDP socket
+//!   `decapsulate` continues to accept new incoming TCP connections, and creates a new UDP socket
 //!   for each. So a single `tcp2udp` server can be used to service many `udp2tcp` clients.
 //!
 //! # Protocol
@@ -58,10 +58,10 @@
 //!
 //! // Create a UDP -> TCP forwarder. This will connect the TCP socket
 //! // to `tcp_forward_addr`
-//! let udp2tcp = udp_over_tcp::Udp2Tcp::new(
+//! let udp2tcp = udp2tcp::Udp2Tcp::new(
 //!     udp_listen_addr,
 //!     tcp_forward_addr,
-//!     udp_over_tcp::TcpOptions::default(),
+//!     udp2tcp::TcpOptions::default(),
 //! )
 //! .await?;
 //!
@@ -81,10 +81,10 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::all)]
 
-pub mod tcp2udp;
-pub mod udp2tcp;
+pub mod decapsulate;
+pub mod encapsulate;
 
-pub use udp2tcp::Udp2Tcp;
+pub use encapsulate::Udp2Tcp;
 
 mod exponential_backoff;
 mod forward_traffic;

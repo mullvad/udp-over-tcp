@@ -4,7 +4,7 @@ use clap::Parser;
 use err_context::ErrorExt as _;
 use std::num::NonZeroU8;
 
-use udp_over_tcp::tcp2udp;
+use udp2tcp::decapsulate;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -19,7 +19,7 @@ pub struct Options {
     threads: Option<NonZeroU8>,
 
     #[clap(flatten)]
-    tcp2udp_options: tcp2udp::Options,
+    tcp2udp_options: decapsulate::Options,
 }
 
 fn main() {
@@ -30,7 +30,7 @@ fn main() {
 
     let runtime = create_runtime(options.threads);
 
-    let Err(error) = runtime.block_on(tcp2udp::run(options.tcp2udp_options));
+    let Err(error) = runtime.block_on(decapsulate::run(options.tcp2udp_options));
     log::error!("Error: {}", error.display("\nCaused by: "));
     std::process::exit(1);
 }

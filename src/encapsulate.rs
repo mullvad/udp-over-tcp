@@ -1,5 +1,5 @@
 //! Primitives for listening on UDP and forwarding the data in incoming datagrams
-//! to a TCP stream.
+//! to a TCP stream. Also referred to as `udp2tcp`.
 
 use crate::logging::Redact;
 use std::fmt;

@@ -5,7 +5,7 @@ use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Mutex, mpsc};
-use udp_over_tcp::{DatagramSocket, process_udp_over_tcp};
+use udp2tcp::{DatagramSocket, process_udp_over_tcp};
 
 /// An in-memory datagram transport. Datagrams sent by the forwarder end up in `outgoing`,
 /// and datagrams pushed into `incoming` are received by the forwarder.

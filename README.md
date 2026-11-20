@@ -1,9 +1,9 @@
-# udp-over-tcp
+# udp2tcp
 
 A library (and binaries) for tunneling UDP datagrams over a TCP stream.
 
 Some programs/protocols only work over UDP. And some networks only allow TCP. This is where
-`udp-over-tcp` comes in handy. This library comes in two parts:
+`udp2tcp` comes in handy. This library comes in two parts:
 
 * `udp2tcp` - Forwards incoming UDP datagrams over a TCP stream. The return stream
   is translated back to datagrams and sent back out over UDP again.
@@ -57,10 +57,10 @@ let tcp_forward_addr = "1.2.3.4:9000".parse().unwrap();
 
 // Create a UDP -> TCP forwarder. This will connect the TCP socket
 // to `tcp_forward_addr`
-let udp2tcp = udp_over_tcp::Udp2Tcp::new(
+let udp2tcp = udp2tcp::Udp2Tcp::new(
     udp_listen_addr,
     tcp_forward_addr,
-    udp_over_tcp::TcpOptions::default(),
+    udp2tcp::TcpOptions::default(),
 )
 .await?;
 
