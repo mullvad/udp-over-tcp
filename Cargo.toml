@@ -5,6 +5,7 @@ authors = ["Mullvad VPN"]
 license = "MIT OR Apache-2.0"
 description = "Tunnel UDP traffic inside a TCP stream"
 keywords = ["networking", "udp", "tcp"]
+categories = ["network-programming", "command-line-utilities"]
 repository = "https://github.com/mullvad/udp-over-tcp"
 edition = "2024"
 rust-version = "1.87.0"
