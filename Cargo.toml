@@ -9,7 +9,6 @@ categories = ["network-programming", "command-line-utilities"]
 repository = "https://github.com/mullvad/udp-over-tcp"
 edition = "2024"
 rust-version = "1.87.0"
-publish = false
 
 [[bin]]
 name = "tcp2udp"
