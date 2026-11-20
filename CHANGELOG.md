@@ -22,6 +22,9 @@ Line wrap the file at 100 chars.                                              Th
 
 
 ## [Unreleased]
+
+
+## [0.5.0] - 2026-11-20
 ### Added
 - Expose `process_udp_over_tcp`. Allows forwarding traffic between a UDP and a TCP socket that the
   caller set up themselves, instead of going through `Udp2Tcp`.
